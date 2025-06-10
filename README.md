@@ -1,2 +1,2 @@
-# Mambo_system_sales_95
- Sistema de gestao e venda
+# mambo_system_95
+ Sistema de venda e Gestao

@@ -1,0 +1,21 @@
+{
+    "name": "edsonmambo/mambo_system_95",
+    "description": "Sistema de gestão de vendas e controle de stock - MamboSystem95",
+    "type": "project",
+    "autoload": {
+      "psr-4": {
+        "Controller\\": "src/Controller/",
+        "Model\\": "src/Model/",
+        "View\\": "src/View/"
+      }
+    },
+    "authors": [
+      {
+        "name": "Edson Mambo",
+        "email": "edsonmambo@hotmail.com"
+      }
+    ],
+    "require": {
+        "dompdf/dompdf": "^3.1"
+    }
+  }
