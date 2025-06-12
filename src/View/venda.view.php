@@ -36,6 +36,8 @@ foreach ($carrinho as $item) {
         <span><strong>Recibo nº:</strong> <?= htmlspecialchars($numero_recibo) ?></span>
         <span><strong>Data/Hora:</strong> <?= date('d/m/Y H:i:s') ?></span>
         <span><a href="../public/vales.php" class="btn btn-primary">Ir para Venda</a></span>
+        <span><a href="../public/teka_away_menu.php" class="btn btn-primary">Menu Take Away</a></span>
+        
 
     </div>
     <a href="logout.php" class="btn btn-sm btn-outline-danger">🔒 Terminar Sessão</a>
@@ -118,6 +120,11 @@ foreach ($carrinho as $item) {
             <label for="valor_pago" class="form-label">Valor Pago (MT):</label>
             <input type="number" step="0.01" min="0" name="valor_pago" id="valor_pago" class="form-control" required />
         </div>
+        <div class="mb-3">
+            <label class="form-label"><strong>Troco (MT):</strong></label>
+            <input type="text" id="troco" class="form-control fw-bold" readonly>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button type="submit" name="finalizar_venda" class="btn btn-primary">Confirmar</button>
@@ -250,6 +257,41 @@ document.getElementById('btnFinalizarVenda').addEventListener('click', function 
         console.error(error);
     });
 });
+</script>
+
+        
+<script>
+    // Logica do calculo do troco
+document.getElementById('valor_pago').addEventListener('input', function () {
+    const valorPago = parseFloat(this.value);
+    const totalVenda = <?= $total ?>;
+    
+    if (!isNaN(valorPago)) {
+        const troco = valorPago - totalVenda;
+        document.getElementById('troco').value = troco >= 0
+            ? troco.toFixed(2).replace('.', ',')
+            : '0,00';
+    } else {
+        document.getElementById('troco').value = '';
+    }
+});
+
+// Focar no campo de busca ao carregar a página
+window.onload = function() {
+    const campoBusca = document.getElementById('busca_produto');
+    if (campoBusca) campoBusca.focus();
+};
+
+// Re-focar no campo após cada ação com AJAX (se houver no futuro)
+// e ao pressionar Enter no campo de quantidade, por exemplo
+document.getElementById('quantidade')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        setTimeout(() => {
+            document.getElementById('busca_produto')?.focus();
+        }, 100);
+    }
+});
+
 </script>
 
 

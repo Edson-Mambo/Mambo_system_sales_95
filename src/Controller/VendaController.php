@@ -100,7 +100,7 @@ class VendaController
         try {
             $this->pdo->beginTransaction();
 
-            $stmtVenda = $this->pdo->prepare("INSERT INTO vendas (usuario_id, total, valor_pago, troco, data_hora) VALUES (:usuario_id, :total, :valor_pago, :troco, NOW())");
+            $stmtVenda = $this->pdo->prepare("INSERT INTO vendas (usuario_id, total, valor_pago, troco, data_venda) VALUES (:usuario_id, :total, :valor_pago, :troco, NOW())");
             $stmtVenda->execute([
                 ':usuario_id' => $_SESSION['usuario_id'],
                 ':total' => $total,
@@ -110,7 +110,7 @@ class VendaController
 
             $vendaId = $this->pdo->lastInsertId();
 
-            $stmtItem = $this->pdo->prepare("INSERT INTO produtos_vendidos (venda_id, codigo_barra, quantidade, preco_unitario) VALUES (:venda_id, :codigo_barra, :quantidade, :preco)");
+            $stmtItem = $this->pdo->prepare("INSERT INTO produtos_vendidos (venda_id, produto_id, quantidade, preco_unitario) VALUES (:venda_id, (SELECT id FROM produtos WHERE codigo_barra = :codigo_barra), :quantidade, :preco)");
 
             foreach ($carrinho as $codigo => $item) {
                 $stmtItem->execute([
@@ -132,8 +132,7 @@ class VendaController
             $_SESSION['numero_recibo'] = $vendaId;
             $_SESSION['carrinho'] = [];
 
-            // Retorno vazio com sucesso para não aparecer JSON
-            http_response_code(204); // 204 = No Content
+            http_response_code(204); // Sucesso, sem conteúdo
             exit;
 
         } catch (PDOException $e) {
@@ -148,12 +147,12 @@ class VendaController
 
     public function gerarReciboPdf(int $vendaId): void
     {
-        $stmt = $this->pdo->prepare("SELECT p.nome, pv.quantidade, pv.preco_unitario FROM produtos_vendidos pv JOIN produtos p ON pv.codigo_barra = p.codigo_barra WHERE pv.venda_id = ?");
+        $stmt = $this->pdo->prepare("SELECT p.nome, pv.quantidade, pv.preco_unitario FROM produtos_vendidos pv JOIN produtos p ON pv.produto_id = p.id WHERE pv.venda_id = ?");
         $stmt->execute([$vendaId]);
         $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         ob_start();
-        include __DIR__ . '/../View/recibo.view.php'; // seu template do recibo em HTML
+        include __DIR__ . '/../View/recibo.view.php';
         $html = ob_get_clean();
 
         $dompdf = new Dompdf();

@@ -1,46 +1,60 @@
-<?php
-require_once '../../config/database.php';
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Recibo de Venda</title>
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 14px; }
+        h2 { text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .total { font-weight: bold; }
+        .footer { margin-top: 20px; text-align: center; font-size: 12px; }
+    </style>
+</head>
+<body>
 
-$recibo = $_GET['recibo'] ?? '';
+    <h2>Recibo de Venda</h2>
 
-if (!$recibo) {
-    echo "Recibo não encontrado.";
-    exit;
-}
+    <p><strong>Data:</strong> <?= date('d/m/Y H:i:s') ?></p>
+    <p><strong>Nº Recibo:</strong> <?= $_SESSION['numero_recibo'] ?? '---' ?></p>
 
-$stmt = $pdo->prepare("SELECT * FROM produtos_vendidos WHERE recibo = ?");
-$stmt->execute([$recibo]);
-$produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    <table>
+        <thead>
+            <tr>
+                <th>Produto</th>
+                <th>Qtd</th>
+                <th>Preço Unit.</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php
+                $totalGeral = 0;
+                foreach ($produtos as $item):
+                    $total = $item['quantidade'] * $item['preco_unitario'];
+                    $totalGeral += $total;
+            ?>
+                <tr>
+                    <td><?= htmlspecialchars($item['nome']) ?></td>
+                    <td><?= $item['quantidade'] ?></td>
+                    <td><?= number_format($item['preco_unitario'], 2, ',', '.') ?> MZN</td>
+                    <td><?= number_format($total, 2, ',', '.') ?> MZN</td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+        <tfoot>
+            <tr class="total">
+                <td colspan="3" style="text-align: right;">Total:</td>
+                <td><?= number_format($totalGeral, 2, ',', '.') ?> MZN</td>
+            </tr>
+        </tfoot>
+    </table>
 
-$stmt = $pdo->prepare("SELECT * FROM vendas WHERE recibo = ?");
-$stmt->execute([$recibo]);
-$venda = $stmt->fetch(PDO::FETCH_ASSOC);
-?>
+    <div class="footer">
+        <p>Obrigado pela preferência!</p>
+    </div>
 
-<h2>Recibo Nº <?= htmlspecialchars($recibo) ?></h2>
-<p><strong>Data:</strong> <?= $venda['data'] ?></p>
-<p><strong>Total:</strong> <?= number_format($venda['total'], 2) ?> MZN</p>
-
-<table border="1">
-    <thead>
-        <tr>
-            <th>Produto</th>
-            <th>Qtd</th>
-            <th>Preço Unit.</th>
-            <th>Total</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($produtos as $p): ?>
-        <tr>
-            <td><?= $p['produto_id'] ?></td>
-            <td><?= $p['quantidade'] ?></td>
-            <td><?= number_format($p['preco_unitario'], 2) ?></td>
-            <td><?= number_format($p['preco_total'], 2) ?></td>
-        </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
-
-<button onclick="window.print()">Imprimir</button>
-<a href="../../public/venda.php">Nova Venda</a>
+</body>
+</html>

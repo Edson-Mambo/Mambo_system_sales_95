@@ -2,137 +2,199 @@
 session_start();
 require_once '../config/database.php';
 
-// Verifica se está logado
-if (!isset($_SESSION['usuario_id'])) {
-    header('Location: login.php');
-    exit;
+
+$pdo = Database::conectar();
+
+$carrinho = &$_SESSION['carrinho'];
+if (!isset($carrinho)) {
+    $_SESSION['carrinho'] = [];
+    $carrinho = &$_SESSION['carrinho'];
 }
 
-$mensagem = '';
+$erro = '';
+$clienteEncontrado = null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $cliente = $_POST['cliente_nome'];
-    $produtos = $_POST['produto'];
-    $quantidades = $_POST['quantidade'];
-    $precos = $_POST['preco'];
-
-    $total = 0;
-    foreach ($quantidades as $i => $qtd) {
-        $total += $qtd * $precos[$i];
-    }
-
-    $stmt = $pdo->prepare("INSERT INTO vales (cliente_nome, valor_total, usuario_id) VALUES (?, ?, ?)");
-    $stmt->execute([$cliente, $total, $_SESSION['usuario_id']]);
-    $vale_id = $pdo->lastInsertId();
-
-    foreach ($produtos as $i => $produto_id) {
-        $stmt = $pdo->prepare("INSERT INTO itens_vale (vale_id, produto_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$vale_id, $produto_id, $quantidades[$i], $precos[$i]]);
-    }
-
-    $mensagem = 'Vale registrado com sucesso!';
+// Função para buscar produto no banco por código ou nome
+function buscarProduto($pdo, $codigo) {
+    $stmt = $pdo->prepare("SELECT codigo_barra, nome, preco FROM produtos WHERE codigo_barra = ? OR nome = ?");
+    $stmt->execute([$codigo, $codigo]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-$produtos = $pdo->query("SELECT * FROM produtos")->fetchAll(PDO::FETCH_ASSOC);
+// Função para buscar cliente por nome ou telefone
+function buscarCliente($pdo, $busca) {
+    $stmt = $pdo->prepare("SELECT id, nome, telefone FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1");
+    $likeBusca = "%$busca%";
+    $stmt->execute([$likeBusca, $likeBusca]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+// Adicionar produto no carrinho
+if (isset($_POST['adicionar'])) {
+    $busca = trim($_POST['busca_produto'] ?? '');
+    $quantidade = intval($_POST['quantidade'] ?? 1);
+    if ($busca !== '' && $quantidade > 0) {
+        $produto = buscarProduto($pdo, $busca);
+        if ($produto) {
+            $codigo = $produto['codigo_barra'];
+            if (isset($carrinho[$codigo])) {
+                $carrinho[$codigo]['quantidade'] += $quantidade;
+            } else {
+                $carrinho[$codigo] = [
+                    'nome' => $produto['nome'],
+                    'preco' => (float)$produto['preco'],
+                    'quantidade' => $quantidade
+                ];
+            }
+        } else {
+            $erro = "Produto não encontrado: " . htmlspecialchars($busca);
+        }
+    } else {
+        $erro = "Informe um produto e quantidade válidos.";
+    }
+}
+
+// Remover produto do carrinho
+if (isset($_POST['remover_produto'])) {
+    $codigoRemover = $_POST['remover_produto'];
+    if (isset($carrinho[$codigoRemover])) {
+        unset($carrinho[$codigoRemover]);
+    }
+}
+
+// Buscar cliente ao digitar nome ou telefone
+$clienteNome = $_POST['cliente_nome'] ?? '';
+$clienteTelefone = $_POST['cliente_telefone'] ?? '';
+if (!empty($clienteNome) || !empty($clienteTelefone)) {
+    $buscaCliente = $clienteNome ?: $clienteTelefone;
+    $clienteEncontrado = buscarCliente($pdo, $buscaCliente);
+}
+
+// Calcular total do carrinho
+$total = 0;
+foreach ($carrinho as $item) {
+    $total += $item['preco'] * $item['quantidade'];
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <title>Venda por Vale</title>
-  <link href="../assets/bootstrap.min.css" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <title>Gerenciar Vales</title>
+    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="container mt-4">
-  <h2>Venda por Vale</h2>
-  <?php if ($mensagem): ?><div class="alert alert-success"><?= $mensagem ?></div><?php endif; ?>
+<body class="p-4">
 
-  <form method="post">
-    <div class="mb-3">
-      <label>Nome do Cliente</label>
-      <input type="text" name="cliente_nome" class="form-control" required>
+<div class="container">
+    <h1 class="mb-4">Adicionar Produtos ao Vale</h1>
+
+    <?php if (!empty($erro)): ?>
+        <div class="alert alert-danger"><?= $erro ?></div>
+    <?php endif; ?>
+
+    <!-- Form cliente -->
+    <form method="post" class="mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="cliente_nome" class="form-label">Nome do Cliente</label>
+                <input type="text" id="cliente_nome" name="cliente_nome" value="<?= htmlspecialchars($clienteNome) ?>" class="form-control" placeholder="Digite o nome do cliente">
+            </div>
+            <div class="col-md-4">
+                <label for="cliente_telefone" class="form-label">Telefone do Cliente</label>
+                <input type="text" id="cliente_telefone" name="cliente_telefone" value="<?= htmlspecialchars($clienteTelefone) ?>" class="form-control" placeholder="Digite o telefone do cliente">
+            </div>
+            <div class="col-md-3 d-grid">
+                <button type="submit" class="btn btn-info">Buscar Cliente</button>
+            </div>
+        </div>
+    </form>
+
+    <?php if ($clienteEncontrado): ?>
+        <div class="alert alert-success">
+            Cliente encontrado: <strong><?= htmlspecialchars($clienteEncontrado['nome']) ?></strong>, Telefone: <strong><?= htmlspecialchars($clienteEncontrado['telefone']) ?></strong>
+        </div>
+    <?php elseif (($clienteNome !== '' || $clienteTelefone !== '') && !$clienteEncontrado): ?>
+        <div class="alert alert-warning">
+            Cliente não encontrado. Será criado um novo ao finalizar o vale.
+        </div>
+    <?php endif; ?>
+
+    <!-- Form adicionar produto -->
+    <form method="post" class="row g-3 mb-4 align-items-end">
+        <div class="col-md-6">
+            <label for="busca_produto" class="form-label">Código de barras ou Nome do produto</label>
+            <input type="text" id="busca_produto" name="busca_produto" class="form-control" placeholder="Digite o código de barras ou o nome do produto" required>
+        </div>
+        <div class="col-md-2">
+            <label for="quantidade" class="form-label">Quantidade</label>
+            <input type="number" id="quantidade" name="quantidade" min="1" value="1" class="form-control" required>
+        </div>
+        <div class="col-md-4 d-grid">
+            <button type="submit" name="adicionar" class="btn btn-primary">Adicionar Produto</button>
+        </div>
+    </form>
+
+    <!-- Carrinho -->
+    <div class="table-responsive mb-4">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nome</th>
+                    <th>Preço Unit.</th>
+                    <th>Quantidade</th>
+                    <th>Subtotal</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($carrinho)) : ?>
+                    <?php foreach ($carrinho as $codigo => $item) : 
+                        $subtotal = $item['preco'] * $item['quantidade'];
+                    ?>
+                    <tr>
+                        <td><?= htmlspecialchars($item['nome']) ?></td>
+                        <td>MT <?= number_format($item['preco'], 2, ',', '.') ?></td>
+                        <td><?= $item['quantidade'] ?></td>
+                        <td>MT <?= number_format($subtotal, 2, ',', '.') ?></td>
+                        <td>
+                            <form method="post" style="display:inline;">
+                                <button type="submit" name="remover_produto" value="<?= htmlspecialchars($codigo) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Remover produto?');">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr><td colspan="5" class="text-center">Carrinho vazio</td></tr>
+                <?php endif; ?>
+            </tbody>
+            <tfoot>
+                <tr class="table-secondary">
+                    <td colspan="3" class="text-end fw-bold">Total:</td>
+                    <td class="fw-bold" colspan="2">MT <?= number_format($total, 2, ',', '.') ?></td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 
-    <table class="table">
-      <thead>
-        <tr><th>Produto</th><th>Quantidade</th><th>Preço</th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($produtos as $p): ?>
-        <tr>
-          <td>
-            <?= $p['nome'] ?>
-            <input type="hidden" name="produto[]" value="<?= $p['id'] ?>">
-          </td>
-          <td><input type="number" name="quantidade[]" class="form-control" value="1" min="1"></td>
-          <td>
-            <?= number_format($p['preco'], 2, ',', '.') ?>
-            <input type="hidden" name="preco[]" value="<?= $p['preco'] ?>">
-          </td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+    <!-- Botão Voltar -->
+    <div class="mb-3">
+        <a href="venda.php" class="btn btn-secondary">Voltar</a>
+    </div>
 
-    <button type="submit" class="btn btn-primary">Salvar Vale</button>
-    <a href="venda.php" class="btn btn-secondary">Voltar</a>
-  </form>
-</body>
-</html>
-
-// ===============================
-// 3. Scripts para venda.php (HTML/JS)
-// ===============================
-
-<!-- Adicione no navbar ou onde quiser o botão -->
-<button class="btn btn-warning" onclick="pedirAutorizacao()">Venda por Vale</button>
-
-<!-- Modal de Autorização -->
-<div class="modal fade" id="modalAutorizacao" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form class="modal-content" onsubmit="return verificarAutorizacao(event)">
-      <div class="modal-header">
-        <h5 class="modal-title">Autorização Requerida</h5>
-      </div>
-      <div class="modal-body">
-        <input type="password" class="form-control" id="senhaAutorizacao" placeholder="Digite a senha do supervisor/gerente/admin" required>
-        <div id="erroAutorizacao" class="text-danger mt-2 d-none">Senha incorreta ou sem permissão!</div>
-      </div>
-      <div class="modal-footer">
-        <button type="submit" class="btn btn-primary">Confirmar</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-      </div>
+    <!-- Finalizar Vale -->
+    <form method="post" action="salvar_vale.php">
+        <input type="hidden" name="total_vale" value="<?= $total ?>">
+        <input type="hidden" name="cliente_id" value="<?= $clienteEncontrado['id'] ?? '' ?>">
+        <input type="hidden" name="cliente_nome" value="<?= htmlspecialchars($clienteNome) ?>">
+        <input type="hidden" name="cliente_telefone" value="<?= htmlspecialchars($clienteTelefone) ?>">
+        <button type="submit" name="finalizar_vale" class="btn btn-success" <?= empty($carrinho) ? 'disabled' : '' ?>>
+            Finalizar Vale
+        </button>
     </form>
-  </div>
 </div>
 
-<script>
-function pedirAutorizacao() {
-    document.getElementById('senhaAutorizacao').value = '';
-    document.getElementById('erroAutorizacao').classList.add('d-none');
-    new bootstrap.Modal(document.getElementById('modalAutorizacao')).show();
-}
 
-function verificarAutorizacao(e) {
-    e.preventDefault();
-    const senha = document.getElementById('senhaAutorizacao').value;
-
-    fetch('verificar_autorizacao.php', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'senha=' + encodeURIComponent(senha)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.autorizado) {
-            window.location.href = 'vales.php';
-        } else {
-            document.getElementById('erroAutorizacao').classList.remove('d-none');
-        }
-    });
-
-    return false;
-}
-</script>
-
-<!-- Certifique-se de que Bootstrap e JS estejam carregados -->
-<script src="../assets/bootstrap.bundle.min.js"></script>
+<script src="../bootstrap/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
