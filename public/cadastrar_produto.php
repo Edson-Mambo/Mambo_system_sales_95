@@ -2,6 +2,7 @@
 require_once '../config/database.php';
 $pdo = Database::conectar();
 $cats = $pdo->query("SELECT * FROM categorias")->fetchAll();
+include 'helpers/voltar_menu.php'; 
 
 // Inserção ao submeter o formulário
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -72,8 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button type="submit" class="btn btn-primary w-100">Cadastrar</button>
        
         <div class="text-center mt-4">
-            <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
+            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
         </div>
+
     </form>
 </div>
 

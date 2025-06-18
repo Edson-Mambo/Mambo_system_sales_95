@@ -119,13 +119,15 @@ class VendaController
                     ':quantidade' => $item['quantidade'],
                     ':preco' => $item['preco']
                 ]);
-
-                $stmtEstoque = $this->pdo->prepare("UPDATE produtos SET estoque = estoque - :quantidade WHERE codigo_barra = :codigo");
+            
+                // Subtrai a quantidade correta do campo `quantidade`
+                $stmtEstoque = $this->pdo->prepare("UPDATE produtos SET quantidade = quantidade - :quantidade WHERE codigo_barra = :codigo");
                 $stmtEstoque->execute([
                     ':quantidade' => $item['quantidade'],
                     ':codigo' => $codigo
                 ]);
             }
+            
 
             $this->pdo->commit();
 

@@ -3,12 +3,6 @@ session_start();
 require_once '../config/database.php';
 $pdo = Database::conectar();
 
-// Verificar login
-//if (!isset($_SESSION['usuario'])) {
- //   header('Location: login.php');
-//    exit;
-//}
-
 $stmt = $pdo->query("SELECT id, nome, preco, imagem FROM produtos_takeaway");
 $produtos = $stmt->fetchAll();
 ?>
@@ -16,10 +10,9 @@ $produtos = $stmt->fetchAll();
 <!DOCTYPE html>
 <html lang="pt-MZ">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Menu Teka Away</title>
-    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
-    <script src="../bootstrap/bootstrap-5.3.3/js/jquery.min.js"></script>
+    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
     <style>
         .produto-img {
             width: 150px;
@@ -61,14 +54,17 @@ $produtos = $stmt->fetchAll();
         <?php foreach ($produtos as $produto): ?>
             <div class="col-sm-6 col-md-4 col-lg-3 mb-4 d-flex justify-content-center">
                 <div class="card produto text-center p-2">
-                    <img src="imagens/<?= $produto['imagem'] ?>" class="produto-img mx-auto" alt="<?= htmlspecialchars($produto['nome']) ?>">
+                    <img src="imagens/<?= htmlspecialchars($produto['imagem']) ?>" class="produto-img mx-auto" alt="<?= htmlspecialchars($produto['nome']) ?>" />
                     <div class="card-body">
                         <h5 class="card-title"><?= htmlspecialchars($produto['nome']) ?></h5>
                         <p class="card-text"><?= number_format($produto['preco'], 2) ?> MZN</p>
                         <button class="btn btn-success btn-sm adicionar-btn"
-                            data-id="<?= $produto['id'] ?>"
-                            data-nome="<?= htmlspecialchars($produto['nome']) ?>"
-                            data-preco="<?= $produto['preco'] ?>">Adicionar ao Carrinho</button>
+                                type="button"
+                                data-id="<?= $produto['id'] ?>"
+                                data-nome="<?= htmlspecialchars($produto['nome']) ?>"
+                                data-preco="<?= $produto['preco'] ?>">
+                            Adicionar ao Carrinho
+                        </button>
                     </div>
                 </div>
             </div>
@@ -79,22 +75,42 @@ $produtos = $stmt->fetchAll();
 <div class="carrinho" id="carrinho">
     <h5>Carrinho</h5>
     <ul id="itensCarrinho" class="list-group mb-2"></ul>
-    <strong>Total: <span id="total">0.00</span> MZN</strong><br>
+    <strong>Total: <span id="total">0.00</span> MZN</strong><br />
     <button id="finalizarVenda" class="btn btn-primary mt-2">Finalizar Venda</button>
 </div>
 
 <div class="toast-container" id="toast-container"></div>
 
-<!-- JQUERY PRIMEIRO -->
-<script src="../bootstrap/bootstrap-5.3.3/jquery-3.6.0.min.js"></script>
-<!-- jQuery CDN -->
+<!-- Modal Pagamento -->
+<div class="modal fade" id="modalPagamento" tabindex="-1" aria-labelledby="modalPagamentoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formPagamento">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalPagamentoLabel">Finalizar Venda</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p>Total da compra: <strong id="totalCompraModal">0.00</strong> MZN</p>
+          <div class="mb-3">
+            <label for="valorPago" class="form-label">Valor pago pelo cliente (MZN):</label>
+            <input type="number" min="0" step="0.01" class="form-control" id="valorPago" required autocomplete="off" />
+          </div>
+          <p>Troco: <strong id="troco">0.00</strong> MZN</p>
+          <div id="msgErroPagamento" class="text-danger" style="display:none;">Valor pago deve ser igual ou maior que o total!</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Confirmar Pagamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-
-<!-- BOOTSTRAP DEPOIS -->
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 
-<!-- SEU SCRIPT INLINE (que usa jQuery) POR ÚLTIMO -->
 <script>
 $(document).ready(function() {
     let carrinho = [];
@@ -114,14 +130,32 @@ $(document).ready(function() {
         bsToast.show();
     }
 
+    function renderCarrinho() {
+        $('#itensCarrinho').empty();
+        let total = 0;
+        carrinho.forEach((item, index) => {
+            total += item.preco * item.qtd;
+            $('#itensCarrinho').append(`
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    ${item.nome} x${item.qtd}
+                    <div>
+                        <span>${(item.preco * item.qtd).toFixed(2)} MZN</span>
+                        <button class="btn btn-sm btn-danger ms-2 remover-btn" data-index="${index}">&times;</button>
+                    </div>
+                </li>
+            `);
+        });
+        $('#total').text(total.toFixed(2));
+    }
+
     $(document).on('click', '.adicionar-btn', function() {
         const id = $(this).data('id');
         const nome = $(this).data('nome');
         const preco = parseFloat($(this).data('preco'));
 
-        const itemExistente = carrinho.find(p => p.id === id);
-        if (itemExistente) {
-            itemExistente.qtd += 1;
+        const existente = carrinho.find(p => p.id === id);
+        if (existente) {
+            existente.qtd += 1;
         } else {
             carrinho.push({ id, nome, preco, qtd: 1 });
         }
@@ -130,48 +164,91 @@ $(document).ready(function() {
         showToast(`${nome} adicionado ao carrinho`);
     });
 
-    function renderCarrinho() {
-        $('#itensCarrinho').empty();
-        let total = 0;
-
-        carrinho.forEach((item, index) => {
-            total += item.preco * item.qtd;
-            $('#itensCarrinho').append(
-                `<li class="list-group-item d-flex justify-content-between align-items-center">
-                    ${item.nome} x${item.qtd}
-                    <div>
-                        <span>${(item.preco * item.qtd).toFixed(2)} MZN</span>
-                        <button class="btn btn-sm btn-danger ms-2 remover-btn" data-index="${index}">&times;</button>
-                    </div>
-                </li>`
-            );
-        });
-
-        $('#total').text(total.toFixed(2));
-    }
-
     $(document).on('click', '.remover-btn', function() {
         const index = $(this).data('index');
         carrinho.splice(index, 1);
         renderCarrinho();
     });
 
-    $('#finalizarVenda').click(function() {
+    function abrirModalPagamento() {
         if (carrinho.length === 0) {
             alert("Carrinho vazio!");
             return;
         }
+        const total = carrinho.reduce((acc, item) => acc + item.preco * item.qtd, 0);
+        $('#totalCompraModal').text(total.toFixed(2));
+        $('#valorPago').val('');
+        $('#troco').text('0.00');
+        $('#msgErroPagamento').hide();
+        const modal = new bootstrap.Modal(document.getElementById('modalPagamento'));
+        modal.show();
+    }
 
-        $.post('finalizar_venda_teka_away.php', { carrinho: JSON.stringify(carrinho) }, function(res) {
-            alert('Venda finalizada com sucesso!');
-            carrinho = [];
-            renderCarrinho();
-        }).fail(function() {
-            alert('Erro ao finalizar a venda. Tente novamente.');
+    $('#finalizarVenda').click(function() {
+        abrirModalPagamento();
+    });
+
+    // Atalho F9 para abrir modal
+    $(document).keydown(function(e) {
+        if (e.key === "F9") {
+            e.preventDefault();
+            abrirModalPagamento();
+        }
+    });
+
+    $('#valorPago').on('input', function() {
+        const total = parseFloat($('#totalCompraModal').text());
+        const pago = parseFloat($(this).val());
+        if (isNaN(pago)) {
+            $('#troco').text('0.00');
+            $('#msgErroPagamento').hide();
+            return;
+        }
+        const troco = pago - total;
+        if (troco < 0) {
+            $('#msgErroPagamento').show();
+            $('#troco').text('0.00');
+        } else {
+            $('#msgErroPagamento').hide();
+            $('#troco').text(troco.toFixed(2));
+        }
+    });
+
+    $('#formPagamento').submit(function(e) {
+        e.preventDefault();
+        const total = parseFloat($('#totalCompraModal').text());
+        const pago = parseFloat($('#valorPago').val());
+
+        if (isNaN(pago) || pago < total) {
+            alert('O valor pago deve ser igual ou maior que o total da compra.');
+            return;
+        }
+
+        $.post('finalizar_venda_teka_away.php', { 
+            carrinho: JSON.stringify(carrinho),
+            valor_pago: pago
+        }, function(response) {
+            try {
+                const res = JSON.parse(response);
+                if (res.status === 'success') {
+                    alert('Venda finalizada com sucesso! ID da Venda: ' + res.id_venda);
+                    carrinho = [];
+                    renderCarrinho();
+                    const modalEl = document.getElementById('modalPagamento');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    modal.hide();
+                } else {
+                    alert('Erro: ' + res.mensagem);
+                }
+            } catch {
+                alert('Erro na resposta do servidor.');
+            }
         });
     });
+
+    // Render inicial do carrinho
+    renderCarrinho();
 });
 </script>
-
 </body>
 </html>

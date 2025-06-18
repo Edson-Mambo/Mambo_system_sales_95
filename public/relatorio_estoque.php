@@ -1,5 +1,6 @@
 <?php
 require_once '../config/database.php';
+include 'helpers/voltar_menu.php'; 
 
 $pdo = Database::conectar();
 
@@ -23,7 +24,7 @@ $relatorio = $pdo->query("
 
     <h2 class="mb-4">Relatório de Ajustes de Estoque</h2>
 
-    <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
+    
 
 
     <table class="table table-bordered table-striped">
@@ -48,6 +49,9 @@ $relatorio = $pdo->query("
             <?php endforeach; ?>
         </tbody>
     </table>
+    <div class="text-center mt-4">
+            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+        </div>
 
     <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>

@@ -1,52 +1,49 @@
 <?php
+session_start();
 require_once '../config/database.php';
+$pdo = Database::conectar();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['carrinho'])) {
-    $pdo = Database::conectar();
-    $carrinho = json_decode($_POST['carrinho'], true);
+$carrinho = json_decode($_POST['carrinho'] ?? '[]', true);
+$valor_pago = floatval($_POST['valor_pago'] ?? 0);
 
-    if (!$carrinho || count($carrinho) === 0) {
-        http_response_code(400);
-        echo "Carrinho vazio!";
-        exit;
-    }
+if (empty($carrinho)) {
+    echo json_encode(['status' => 'error', 'mensagem' => 'Carrinho vazio']);
+    exit;
+}
 
-    // Calcular total
-    $total = 0;
+$total = 0;
+foreach ($carrinho as $item) {
+    $total += $item['preco'] * $item['qtd'];
+}
+
+if ($valor_pago < $total) {
+    echo json_encode(['status' => 'error', 'mensagem' => 'Pagamento insuficiente']);
+    exit;
+}
+
+try {
+    $pdo->beginTransaction();
+
+    // INSERIR NA TABELA DE VENDAS_TAKEAWAY
+    $sql = "INSERT INTO vendas_takeaway (data_venda, total, valor_pago, troco) VALUES (NOW(), ?, ?, ?)";
+    $stmt = $pdo->prepare($sql);
+    $troco = $valor_pago - $total;
+    $stmt->execute([$total, $valor_pago, $troco]);
+
+    $id_venda = $pdo->lastInsertId();
+
+    // INSERIR PRODUTOS NA TABELA produtos_vendidos_takeaway
+    $sqlProduto = "INSERT INTO produtos_vendidos_takeaway (venda_id, produto_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)";
+    $stmtProduto = $pdo->prepare($sqlProduto);
+
     foreach ($carrinho as $item) {
-        $total += $item['preco'] * $item['qtd'];
+        $stmtProduto->execute([$id_venda, $item['id'], $item['qtd'], $item['preco']]);
     }
 
-    // Iniciar transação
-    try {
-        $pdo->beginTransaction();
+    $pdo->commit();
 
-        // Inserir na tabela vendas_takeaway
-        $stmt = $pdo->prepare("INSERT INTO vendas_takeaway (total) VALUES (:total)");
-        $stmt->execute([':total' => $total]);
-        $venda_id = $pdo->lastInsertId();
-
-        // Inserir cada item do carrinho
-        $stmtItem = $pdo->prepare("INSERT INTO produtos_vendidos_takeaway (venda_id, produto_id, nome, preco, quantidade) VALUES (:venda_id, :produto_id, :nome, :preco, :quantidade)");
-
-        foreach ($carrinho as $item) {
-            $stmtItem->execute([
-                ':venda_id'   => $venda_id,
-                ':produto_id' => $item['id'],
-                ':nome'       => $item['nome'],
-                ':preco'      => $item['preco'],
-                ':quantidade' => $item['qtd']
-            ]);
-        }
-
-        $pdo->commit();
-        echo "Venda registrada com sucesso!";
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        http_response_code(500);
-        echo "Erro ao finalizar venda: " . $e->getMessage();
-    }
-} else {
-    http_response_code(400);
-    echo "Requisição inválida.";
+    echo json_encode(['status' => 'success', 'id_venda' => $id_venda]);
+} catch (Exception $e) {
+    $pdo->rollBack();
+    echo json_encode(['status' => 'error', 'mensagem' => $e->getMessage()]);
 }

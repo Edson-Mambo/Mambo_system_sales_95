@@ -3,11 +3,14 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+ 
+
 
 // Inicia sessão e verifica se o usuário é admin (opcional)
 
 
 require_once '../config/database.php';
+include 'helpers/voltar_menu.php'; 
 
 // Criar a conexão PDO
 $pdo = Database::conectar();
@@ -42,7 +45,9 @@ try {
 <body class="container mt-5">
     <h2 class="mb-4">Relatório de Logins</h2>
 
-    <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
+    <div class="text-center mt-4">
+            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+        </div>
 
 
     <?php if (count($logins) > 0): ?>

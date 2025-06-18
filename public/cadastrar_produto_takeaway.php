@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once '../config/database.php';
+include 'helpers/voltar_menu.php'; 
+
 
 if (!isset($_SESSION['usuario_id'])) {
     header('Location: login.php');
@@ -84,8 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button type="submit" class="btn btn-primary">Cadastrar Produto</button>
     </form>
     <div class="text-center mt-4">
-            <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
+            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
         </div>
+        
 </div>
 </body>
 </html>

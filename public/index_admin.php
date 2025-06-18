@@ -16,14 +16,26 @@
         <div class="collapse navbar-collapse">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="cadastrar_produto.php">Cadastrar Produto</a></li>
-                <li class="nav-item"><a class="nav-link" href="/src/View/listar_produtos.view.php">Listar Produtos</a></li>
+                <li class="nav-item"><a class="nav-link" href="../src/View/listar_produtos.view.php">Listar Produtos</a></li>
                 <li class="nav-item"><a class="nav-link" href="cadastrar_usuario.php">Cadastrar Usuário</a></li>
                 <li class="nav-item"><a class="nav-link" href="ajustar_estoque.php">Ajustar Estoque</a></li>
-                <li class="nav-item"><a class="nav-link" href="relatorio_vendas.php">Relatório de Vendas</a></li>
+                <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="relatorioDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    Relatórios
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="relatorioDropdown">
+                    <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório de Vendas</a></li>
+                    <li><a class="dropdown-item" href="relatorio_bebidas.php">Relatório de Bebidas</a></li>
+                    <li><a class="dropdown-item" href="relatorio_mercearia.php">Relatório de Produtos de Mercearia</a></li>
+                </ul>
+                </li>
+
                 <li class="nav-item"><a class="nav-link" href="relatorio_logins.php">Relatório de Logins</a></li>
                 <li class="nav-item"><a class="nav-link" href="relatorio_estoque.php">Relatório de Estoque</a></li>
                 <li class="nav-item"><a class="nav-link" href="cadastrar_produto_takeaway.php">Cadastrar Produtos Take Away</a></li>
                 <li class="nav-item"><a class="nav-link" href="relatorios_teka_away.php">Relatório de Take Away</a></li>
+                <li class="nav-item"><a class="nav-link" href="fecho_dia.php">Fecho do dia</a></li>
+                <li class="nav-item"><a class="nav-link" href="configuracoes/configuracoes.php">Configurações do Sistema</a></li>
                 <li class="nav-item"><a href="logout.php" class="btn btn-danger btn-lg">Terminar Sessão</a></li>
                 
                 

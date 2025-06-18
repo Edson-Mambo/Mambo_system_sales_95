@@ -2,6 +2,7 @@
 require_once '../config/database.php';
 
 session_start();
+include 'helpers/voltar_menu.php'; 
 
 $step = $_POST['step'] ?? 'choose'; // etapa atual (escolha ou form)
 $tipo_usuario = $_POST['tipo_usuario'] ?? null;
@@ -53,7 +54,7 @@ if ($step === 'register' && $tipo_usuario) {
 <head>
     <meta charset="UTF-8" />
     <title>Cadastrar Usuário</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
 </head>
 <body class="container py-5">
     <h2 class="mb-4">Cadastro de Usuário</h2>
@@ -65,6 +66,7 @@ if ($step === 'register' && $tipo_usuario) {
             <button name="tipo_usuario" value="store" class="btn btn-primary btn-lg mx-3">Usuário Store</button>
             <button name="tipo_usuario" value="teka_away" class="btn btn-success btn-lg mx-3">Usuário Teka Away</button>
         </form>
+        <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
 
     <?php elseif ($step === 'form' && $tipo_usuario): ?>
         <!-- Etapa 2: Formulário de cadastro com tipo selecionado -->
@@ -94,8 +96,8 @@ if ($step === 'register' && $tipo_usuario) {
             <button type="submit" class="btn btn-primary">Cadastrar Usuário <?= $tipo_usuario === 'store' ? '(Store)' : '(Teka Away)' ?></button>
         </form>
 
-        <div class="text-center mt-3">
-            <a href="cadastrar_usuario.php" class="btn btn-secondary">Voltar para escolher tipo</a>
+        <div class="text-center mt-4">
+            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
         </div>
     <?php endif; ?>
 </body>

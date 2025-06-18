@@ -13,7 +13,10 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="venda.php">Caixa</a></li>
                 <li class="nav-item"><a class="nav-link" href="relatorio_vendas.php">Relatório de Vendas</a></li>
+                <li class="nav-item"><a class="nav-link" href="relatorios_teka_away.php">Relatório de Take Away</a></li>
+                <li class="nav-item"><a class="nav-link" href="relatorio_estoque.php">Relatório de Estoque</a></li>
                 <li class="nav-item"><a href="logout.php" class="btn btn-danger btn-lg">Terminar Sessão</a></li>
+                
             </ul>
         </div>
     </div>

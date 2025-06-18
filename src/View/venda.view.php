@@ -24,6 +24,12 @@ foreach ($carrinho as $item) {
     <title>Venda - MamboSystem95</title>
     <!-- Bootstrap CSS local -->
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+    /* Apenas inputs no modal com texto em negrito */
+    #finalizarModal input.form-control {
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 <div class="container mt-4">
@@ -293,6 +299,13 @@ document.getElementById('quantidade')?.addEventListener('keydown', function(e) {
 });
 
 </script>
+<script>
+    const finalizarModal = document.getElementById('finalizarModal');
+    finalizarModal.addEventListener('shown.bs.modal', function () {
+        document.getElementById('valor_pago').focus();
+    });
+</script>
+
 
 
 

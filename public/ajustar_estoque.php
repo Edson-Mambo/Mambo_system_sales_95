@@ -1,7 +1,10 @@
 <?php
 session_start();
+
 require_once '../config/database.php';
 $pdo = Database::conectar();
+include 'helpers/voltar_menu.php'; 
+
 
 $mensagem = '';
 $produto_encontrado = false;
@@ -58,6 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <div class="container mt-5">
     <div class="card p-4 shadow">
         <h2 class="mb-4">Ajustar Estoque e Preço</h2>
+        <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
 
         <?php if (!empty($mensagem)): ?>
             <div class="alert alert-info"><?= htmlspecialchars($mensagem) ?></div>
@@ -110,7 +114,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </form>
         <?php endif; ?>
 
-        <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
+        
 
     </div>
 </div>
