@@ -46,7 +46,7 @@ try {
     <h2 class="mb-4">Relatório de Logins</h2>
 
     <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+            <<a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
         </div>
 
 

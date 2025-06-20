@@ -1,61 +1,37 @@
 <?php
-session_start();
-
-if (!isset($_SESSION['usuario_id']) || !in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
-    echo "Acesso negado.";
-    exit;
-}
-
 require_once '../config/database.php';
-require_once '../vendor/autoload.php'; // DomPDF via Composer
+require_once '../vendor/autoload.php'; // se você usa Composer
 
 use Dompdf\Dompdf;
 
 $pdo = Database::conectar();
 $data_hoje = date('Y-m-d');
 
-// RESUMO DAS VENDAS DO DIA
-$stmtResumo = $pdo->prepare("
-    SELECT 
-        COUNT(*) AS total_vendas, 
-        SUM(total) AS total_valor,
-        SUM(valor_pago) AS valor_pago, 
-        SUM(troco) AS troco_total
-    FROM vendas 
-    WHERE DATE(data_venda) = ?
+// Coletar dados do resumo do dia
+$stmt = $pdo->prepare("
+    SELECT COUNT(*) AS total_vendas, SUM(total) AS total_valor,
+           SUM(valor_pago) AS valor_pago, SUM(troco) AS troco_total
+    FROM vendas WHERE DATE(data_venda) = ?
 ");
-$stmtResumo->execute([$data_hoje]);
-$resumo = $stmtResumo->fetch();
+$stmt->execute([$data_hoje]);
+$resumo = $stmt->fetch();
 
-// TOTAL DE PRODUTOS VENDIDOS
-$stmtProdutos = $pdo->prepare("
+$stmtProd = $pdo->prepare("
     SELECT SUM(pv.quantidade) AS total_produtos
     FROM produtos_vendidos pv
     JOIN vendas v ON pv.venda_id = v.id
     WHERE DATE(v.data_venda) = ?
 ");
-$stmtProdutos->execute([$data_hoje]);
-$total_produtos = $stmtProdutos->fetchColumn();
+$stmtProd->execute([$data_hoje]);
+$total_produtos = $stmtProd->fetchColumn();
 
-// MÉTODOS DE PAGAMENTO
 $stmtPagamentos = $pdo->prepare("
     SELECT metodo_pagamento, COUNT(*) AS qtd, SUM(total) AS total
-    FROM vendas 
-    WHERE DATE(data_venda) = ?
-    GROUP BY metodo_pagamento
+    FROM vendas WHERE DATE(data_venda) = ? GROUP BY metodo_pagamento
 ");
 $stmtPagamentos->execute([$data_hoje]);
 $pagamentos = $stmtPagamentos->fetchAll();
 
-// INSERE NO BANCO (TABELA fechos)
-$stmtFecho = $pdo->prepare("INSERT INTO fechos (usuario_id, total_vendas, total_valor) VALUES (?, ?, ?)");
-$stmtFecho->execute([
-    $_SESSION['usuario_id'],
-    $resumo['total_vendas'],
-    $resumo['total_valor']
-]);
-
-// GERAR CONTEÚDO HTML DO RELATÓRIO
 $html = "
 <h2 style='text-align:center;'>Relatório de Fecho do Dia</h2>
 <p><strong>Data:</strong> " . date('d/m/Y') . "</p>
@@ -73,13 +49,11 @@ foreach ($pagamentos as $p) {
 }
 $html .= "</ul>";
 
-// GERAR PDF
 $dompdf = new Dompdf();
 $dompdf->loadHtml($html);
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
 
-// FORÇAR DOWNLOAD
+// Forçar download
 $filename = "fecho_dia_" . date('Ymd_His') . ".pdf";
 $dompdf->stream($filename, ['Attachment' => true]);
-exit;

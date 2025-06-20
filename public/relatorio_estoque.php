@@ -50,8 +50,8 @@ $relatorio = $pdo->query("
         </tbody>
     </table>
     <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
-        </div>
+        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
 
     <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>

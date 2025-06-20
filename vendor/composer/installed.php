@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'edsonmambo/mambo_system_95',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => 'a01dd7ac9efd3075be548bb2d367b76321189b85',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -38,9 +38,9 @@
             'dev_requirement' => false,
         ),
         'edsonmambo/mambo_system_95' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => 'a01dd7ac9efd3075be548bb2d367b76321189b85',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

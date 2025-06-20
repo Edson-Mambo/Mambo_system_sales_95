@@ -2,7 +2,6 @@
 session_start();
 require_once '../config/database.php';
 
-
 $pdo = Database::conectar();
 
 $carrinho = &$_SESSION['carrinho'];
@@ -14,14 +13,12 @@ if (!isset($carrinho)) {
 $erro = '';
 $clienteEncontrado = null;
 
-// Função para buscar produto no banco por código ou nome
 function buscarProduto($pdo, $codigo) {
     $stmt = $pdo->prepare("SELECT codigo_barra, nome, preco FROM produtos WHERE codigo_barra = ? OR nome = ?");
     $stmt->execute([$codigo, $codigo]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// Função para buscar cliente por nome ou telefone
 function buscarCliente($pdo, $busca) {
     $stmt = $pdo->prepare("SELECT id, nome, telefone FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1");
     $likeBusca = "%$busca%";
@@ -29,7 +26,6 @@ function buscarCliente($pdo, $busca) {
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// Adicionar produto no carrinho
 if (isset($_POST['adicionar'])) {
     $busca = trim($_POST['busca_produto'] ?? '');
     $quantidade = intval($_POST['quantidade'] ?? 1);
@@ -54,7 +50,6 @@ if (isset($_POST['adicionar'])) {
     }
 }
 
-// Remover produto do carrinho
 if (isset($_POST['remover_produto'])) {
     $codigoRemover = $_POST['remover_produto'];
     if (isset($carrinho[$codigoRemover])) {
@@ -62,7 +57,6 @@ if (isset($_POST['remover_produto'])) {
     }
 }
 
-// Buscar cliente ao digitar nome ou telefone
 $clienteNome = $_POST['cliente_nome'] ?? '';
 $clienteTelefone = $_POST['cliente_telefone'] ?? '';
 if (!empty($clienteNome) || !empty($clienteTelefone)) {
@@ -70,7 +64,6 @@ if (!empty($clienteNome) || !empty($clienteTelefone)) {
     $clienteEncontrado = buscarCliente($pdo, $buscaCliente);
 }
 
-// Calcular total do carrinho
 $total = 0;
 foreach ($carrinho as $item) {
     $total += $item['preco'] * $item['quantidade'];
@@ -93,7 +86,6 @@ foreach ($carrinho as $item) {
         <div class="alert alert-danger"><?= $erro ?></div>
     <?php endif; ?>
 
-    <!-- Form cliente -->
     <form method="post" class="mb-4">
         <div class="row g-3 align-items-end">
             <div class="col-md-5">
@@ -120,7 +112,6 @@ foreach ($carrinho as $item) {
         </div>
     <?php endif; ?>
 
-    <!-- Form adicionar produto -->
     <form method="post" class="row g-3 mb-4 align-items-end">
         <div class="col-md-6">
             <label for="busca_produto" class="form-label">Código de barras ou Nome do produto</label>
@@ -135,7 +126,6 @@ foreach ($carrinho as $item) {
         </div>
     </form>
 
-    <!-- Carrinho -->
     <div class="table-responsive mb-4">
         <table class="table table-bordered table-hover align-middle">
             <thead class="table-dark">
@@ -177,12 +167,10 @@ foreach ($carrinho as $item) {
         </table>
     </div>
 
-    <!-- Botão Voltar -->
     <div class="mb-3">
         <a href="venda.php" class="btn btn-secondary">Voltar</a>
     </div>
 
-    <!-- Finalizar Vale -->
     <form method="post" action="salvar_vale.php">
         <input type="hidden" name="total_vale" value="<?= $total ?>">
         <input type="hidden" name="cliente_id" value="<?= $clienteEncontrado['id'] ?? '' ?>">
@@ -193,7 +181,6 @@ foreach ($carrinho as $item) {
         </button>
     </form>
 </div>
-
 
 <script src="../bootstrap/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

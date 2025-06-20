@@ -6,15 +6,15 @@ $pdo = Database::conectar();
 $erro = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $usuario = trim($_POST['usuario'] ?? '');
+    $email = trim($_POST['usuario'] ?? ''); // aqui o input continua 'usuario', mas representa o email
     $senha = $_POST['senha'] ?? '';
 
-    if (empty($usuario) || empty($senha)) {
+    if (empty($email) || empty($senha)) {
         $erro = 'Preencha todos os campos.';
     } else {
-        // Busca usuário pelo nome ou email
-        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE nome = ? OR email = ?");
-        $stmt->execute([$usuario, $usuario]);
+        // Busca usuário pelo email (não mais pelo nome)
+        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+        $stmt->execute([$email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user) {
@@ -45,6 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     case 'caixa':
                         header('Location: venda.php');
                         exit;
+                    case 'store':
+                        header('Location: store_menu.php');
+                        exit;
+                    case 'teka_away':
+                        header('Location: teka_away_menu.php');
+                        exit;
                     default:
                         $erro = 'Nível de acesso desconhecido.';
                 }
@@ -57,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="pt">

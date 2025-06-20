@@ -4,41 +4,44 @@ require_once '../config/database.php';
 session_start();
 include 'helpers/voltar_menu.php'; 
 
-$step = $_POST['step'] ?? 'choose'; // etapa atual (escolha ou form)
-$tipo_usuario = $_POST['tipo_usuario'] ?? null;
 $mensagem = '';
+$nivels_validos = ['caixa', 'supervisor', 'gerente', 'admin', 'store', 'teka_away'];
 
-if ($step === 'register' && $tipo_usuario) {
-    // Processar cadastro
-    $nome = $_POST['nome'] ?? '';
-    $usuario = $_POST['usuario'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nome = trim($_POST['nome'] ?? '');
+    $email = trim($_POST['email'] ?? '');
     $senha = $_POST['senha'] ?? '';
+    $nivel = $_POST['nivel'] ?? '';
 
-    if (!$nome || !$usuario || !$senha) {
-        $mensagem = "Por favor, preencha todos os campos.";
+    if (!$nome || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$senha || !in_array($nivel, $nivels_validos)) {
+        $mensagem = "Por favor, preencha todos os campos corretamente e informe um email válido.";
     } else {
         try {
             $pdo = Database::conectar();
 
-            // Verificar se já existe usuário
-            $check = $pdo->prepare("SELECT * FROM usuarios WHERE usuario = ?");
-            $check->execute([$usuario]);
+            // Verificar se já existe usuário com mesmo email
+            $check = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+            $check->execute([$email]);
 
             if ($check->rowCount() > 0) {
-                $mensagem = "Erro: Nome de usuário já está em uso!";
+                $mensagem = "Erro: Email já está em uso!";
             } else {
-                // Inserir usuário
                 $hashSenha = password_hash($senha, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO usuarios (nome, usuario, senha, tipo) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$nome, $usuario, $hashSenha, $tipo_usuario]);
-
-                // Redirecionar para menu conforme tipo
-                if ($tipo_usuario === 'store') {
-                    header("Location: store_menu.php");
-                    exit;
-                } elseif ($tipo_usuario === 'teka_away') {
-                    header("Location: teka_away_menu.php");
-                    exit;
+                $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)");
+                if ($stmt->execute([$nome, $email, $hashSenha, $nivel])) {
+                    // Redireciona conforme nível
+                    if ($nivel === 'store') {
+                        header("Location: store_menu.php");
+                        exit;
+                    } elseif ($nivel === 'teka_away') {
+                        header("Location: teka_away_menu.php");
+                        exit;
+                    } else {
+                        header("Location: painel_admin.php");
+                        exit;
+                    }
+                } else {
+                    $mensagem = "Erro ao inserir usuário.";
                 }
             }
         } catch (PDOException $e) {
@@ -46,7 +49,6 @@ if ($step === 'register' && $tipo_usuario) {
         }
     }
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -59,46 +61,45 @@ if ($step === 'register' && $tipo_usuario) {
 <body class="container py-5">
     <h2 class="mb-4">Cadastro de Usuário</h2>
 
-    <?php if ($step === 'choose'): ?>
-        <!-- Etapa 1: Escolha do tipo de usuário -->
-        <form method="POST" action="cadastrar_usuario.php" class="text-center">
-            <input type="hidden" name="step" value="form" />
-            <button name="tipo_usuario" value="store" class="btn btn-primary btn-lg mx-3">Usuário Store</button>
-            <button name="tipo_usuario" value="teka_away" class="btn btn-success btn-lg mx-3">Usuário Teka Away</button>
-        </form>
-        <button class="btn btn-secondary mb-3" onclick="history.back()">← Voltar</button>
-
-    <?php elseif ($step === 'form' && $tipo_usuario): ?>
-        <!-- Etapa 2: Formulário de cadastro com tipo selecionado -->
-        <form method="POST" action="cadastrar_usuario.php" class="w-50 mx-auto">
-            <input type="hidden" name="step" value="register" />
-            <input type="hidden" name="tipo_usuario" value="<?= htmlspecialchars($tipo_usuario) ?>" />
-
-            <?php if ($mensagem): ?>
-                <div class="alert alert-danger"><?= htmlspecialchars($mensagem) ?></div>
-            <?php endif; ?>
-
-            <div class="mb-3">
-                <label for="nome" class="form-label">Nome Completo</label>
-                <input type="text" id="nome" name="nome" class="form-control" required />
-            </div>
-
-            <div class="mb-3">
-                <label for="usuario" class="form-label">Nome de Usuário</label>
-                <input type="text" id="usuario" name="usuario" class="form-control" required />
-            </div>
-
-            <div class="mb-3">
-                <label for="senha" class="form-label">Senha</label>
-                <input type="password" id="senha" name="senha" class="form-control" required />
-            </div>
-
-            <button type="submit" class="btn btn-primary">Cadastrar Usuário <?= $tipo_usuario === 'store' ? '(Store)' : '(Teka Away)' ?></button>
-        </form>
-
-        <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
-        </div>
+    <?php if ($mensagem): ?>
+        <div class="alert alert-danger"><?= htmlspecialchars($mensagem) ?></div>
     <?php endif; ?>
+
+    <form method="POST" action="cadastrar_usuario.php" class="w-50 mx-auto">
+
+        <div class="mb-3">
+            <label for="nome" class="form-label">Nome Completo</label>
+            <input type="text" id="nome" name="nome" class="form-control" required />
+        </div>
+
+        <div class="mb-3">
+            <label for="email" class="form-label">Email (Nome de Usuário)</label>
+            <input type="email" id="email" name="email" class="form-control" required />
+        </div>
+
+        <div class="mb-3">
+            <label for="senha" class="form-label">Senha</label>
+            <input type="password" id="senha" name="senha" class="form-control" required />
+        </div>
+
+        <div class="mb-3">
+            <label for="nivel" class="form-label">Nível do Usuário</label>
+            <select id="nivel" name="nivel" class="form-select" required>
+                <option value="" disabled selected>Selecione o nível</option>
+                <option value="caixa">Caixa</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="gerente">Gerente</option>
+                <option value="admin">Admin</option>
+                <option value="store">Store</option>
+                <option value="teka_away">Teka Away</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Cadastrar Usuário</button>
+    </form>
+
+    <div class="text-center mt-4">
+        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
 </body>
 </html>

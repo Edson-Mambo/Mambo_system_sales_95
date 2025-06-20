@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="col-12">
             <button type="submit" class="btn btn-primary">Salvar Alterações</button>
             <div class="text-center mt-4">
-                <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+                <a href="../src/View/listar_produtos.view.php" class="btn btn-secondary">← Voltar ao Painel</a>
             </div>
 
             

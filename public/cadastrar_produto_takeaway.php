@@ -86,8 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button type="submit" class="btn btn-primary">Cadastrar Produto</button>
     </form>
     <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
-        </div>
+        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
         
 </div>
 </body>

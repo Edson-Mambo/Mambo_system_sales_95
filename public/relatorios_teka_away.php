@@ -67,8 +67,8 @@ foreach ($resultados as $linha) {
 <body class="container mt-4">
     <h2 class="text-center mb-4">Relatório de Vendas - Takeaway (Agrupado)</h2>
     <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
-        </div>
+        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
 
     <form method="GET" class="row g-3 mb-4">
         <div class="col-md-4">

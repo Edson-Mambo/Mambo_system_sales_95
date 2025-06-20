@@ -4,8 +4,7 @@ require_once '../config/database.php';
 $pdo = Database::conectar();
 include 'helpers/voltar_menu.php'; 
 
-
-// Consulta
+// Consulta com método de pagamento incluído
 $sql = "
 SELECT 
     v.id AS venda_id,
@@ -13,6 +12,7 @@ SELECT
     v.total,
     v.valor_pago,
     v.troco,
+    v.metodo_pagamento,
     p.nome AS nome_produto,
     pv.quantidade,
     pv.preco_unitario,
@@ -34,6 +34,7 @@ foreach ($resultados as $linha) {
     $agrupado[$vendaId]['total'] = $linha['total'];
     $agrupado[$vendaId]['valor_pago'] = $linha['valor_pago'];
     $agrupado[$vendaId]['troco'] = $linha['troco'];
+    $agrupado[$vendaId]['metodo_pagamento'] = $linha['metodo_pagamento']; // NOVO
     $agrupado[$vendaId]['itens'][] = $linha;
 }
 ?>
@@ -57,13 +58,15 @@ foreach ($resultados as $linha) {
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Relatório de Vendas</h2>
         <div>
-            <button class="btn btn-secondary no-print" onclick="history.back()">← Voltar</button>
+            <div class="text-center mt-4">
+                <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+            </div>
             <button class="btn btn-primary no-print" onclick="window.print()">Imprimir Relatório</button>
         </div>
     </div>
 
     <?php
-    $datas_exibidas = []; // para controlar se já mostramos total de um dia
+    $datas_exibidas = [];
     ?>
 
     <?php foreach ($agrupado as $vendaId => $dadosVenda): ?>
@@ -71,7 +74,6 @@ foreach ($resultados as $linha) {
             $dataVenda = date('d/m/Y', strtotime($dadosVenda['data']));
             $itens = $dadosVenda['itens'];
 
-            // Exibir o total diário apenas uma vez por data
             if (!isset($datas_exibidas[$dataVenda])) {
                 $totalDoDia = 0;
                 foreach ($agrupado as $venda) {
@@ -89,7 +91,10 @@ foreach ($resultados as $linha) {
                 <strong>Data da Venda: <?= $dataVenda ?></strong>
             </div>
             <div class="card-body">
-            <h5>Venda Nº <?= $vendaId ?> <small class="text-muted">(<?= date('H:i:s', strtotime($dadosVenda['data'])) ?>)</small></h5>
+                <h5>Venda Nº <?= $vendaId ?> 
+                    <small class="text-muted">(<?= date('H:i:s', strtotime($dadosVenda['data'])) ?>)</small>
+                </h5>
+                <p><strong>Método de Pagamento:</strong> <?= ucfirst($dadosVenda['metodo_pagamento']) ?></p>
 
                 <table class="table table-bordered mb-4">
                     <thead class="table-light">
@@ -130,9 +135,9 @@ foreach ($resultados as $linha) {
     <?php endforeach; ?>
 
     <div class="text-center mt-4">
-            <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
-        </div>
+        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
 
-<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -3,10 +3,10 @@ session_start();
 require_once '../config/database.php';
 $pdo = Database::conectar();
 
+// Consulta produtos do takeaway
 $stmt = $pdo->query("SELECT id, nome, preco, imagem FROM produtos_takeaway");
 $produtos = $stmt->fetchAll();
 ?>
-
 <!DOCTYPE html>
 <html lang="pt-MZ">
 <head>
@@ -29,7 +29,7 @@ $produtos = $stmt->fetchAll();
         .carrinho {
             position: fixed;
             right: 20px;
-            top: 20px;
+            top: 80px;
             background: white;
             padding: 15px;
             border-radius: 10px;
@@ -48,8 +48,23 @@ $produtos = $stmt->fetchAll();
     </style>
 </head>
 <body>
-<div class="container">
-    <h2 class="mt-4 mb-4 text-center">Menu Teka Away</h2>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="#">Menu Teka Away</a>
+    <div class="d-flex align-items-center ms-auto">
+      <span class="text-white me-3">
+        <?php
+          echo isset($_SESSION['usuario_nome']) ? "Olá, " . htmlspecialchars($_SESSION['usuario_nome']) : "Usuário não logado";
+        ?>
+      </span>
+      <a href="logout.php" class="btn btn-outline-light btn-sm">Terminar Sessão</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4">
     <div class="row">
         <?php foreach ($produtos as $produto): ?>
             <div class="col-sm-6 col-md-4 col-lg-3 mb-4 d-flex justify-content-center">
