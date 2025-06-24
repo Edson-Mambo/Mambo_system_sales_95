@@ -2,6 +2,14 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 
+//require_once 'log.php';
+
+
+
+// Supondo que $pdo, $user_id, $user_nome estejam definidos
+//registrarLog($pdo, 'login_sucesso', 'Usuário logou com sucesso', $user_id, $user_nome, $_SERVER['REMOTE_ADDR']);
+
+
 $pdo = Database::conectar();
 $erro = '';
 
@@ -103,5 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </div>
+
+    <?php if (isset($_GET['mensagem'])): ?>
+    <div class="alert alert-warning">
+        <?= htmlspecialchars($_GET['mensagem']) ?>
+    </div>
+<?php endif; ?>
+
 </body>
 </html>

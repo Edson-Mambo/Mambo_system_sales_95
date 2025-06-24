@@ -14,7 +14,7 @@ $numero = $_GET['numero'] ?? '';
         <div class="alert alert-success">
             <h4>✅ Vale Salvo com Sucesso!</h4>
             <p><strong>Número do Vale:</strong> <?= htmlspecialchars($numero) ?></p>
-            <a href="vale.php" class="btn btn-primary">🔙 Voltar para Vales</a>
+            <a href="vales.php" class="btn btn-primary">🔙 Voltar para Vales</a>
         </div>
     </div>
 </body>

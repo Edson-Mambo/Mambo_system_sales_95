@@ -79,7 +79,13 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
               <td>MT <?= number_format($subtotal, 2, ',', '.') ?></td>
               <td>
                 <form method="post" style="display:inline;">
-                  <button type="submit" name="remover_produto" value="<?= htmlspecialchars($codigo) ?>" class="btn btn-danger btn-sm">Remover</button>
+                <button 
+                    type="button" 
+                    class="btn btn-danger btn-sm btn-remover" 
+                    data-codigo="<?= htmlspecialchars($codigo) ?>">
+                    Remover
+                </button>
+
                 </form>
               </td>
             </tr>
@@ -108,10 +114,31 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
       </div>
       <div class="modal-body">
         <p>Total a pagar: <strong>MT <?= number_format($total, 2, ',', '.') ?></strong></p>
+
+        <!-- Checkbox de desconto -->
+        <div class="mb-3 form-check">
+          <input
+            type="checkbox"
+            class="form-check-input"
+            id="desconto_colaborador"
+            name="desconto_colaborador"
+            <?= !empty($_POST['desconto_colaborador']) ? 'checked' : '' ?>
+          />
+          <label class="form-check-label" for="desconto_colaborador">Desconto Colaborador (10%)</label>
+        </div>
+
+        <!-- Total com desconto aplicado -->
+        <div class="mb-2">
+          <strong>Total: </strong><span id="total_valor">MT <?= number_format($total, 2, ',', '.') ?></span>
+        </div>
+
+        <!-- Valor pago -->
         <div class="mb-3">
           <label for="valor_pago" class="form-label">Valor Pago (MT):</label>
           <input type="number" step="0.01" min="0" name="valor_pago" id="valor_pago" class="form-control" required />
         </div>
+
+        <!-- Método de pagamento -->
         <div class="mb-3">
           <label for="metodo_pagamento" class="form-label">Método de Pagamento:</label>
           <select name="metodo_pagamento" id="metodo_pagamento" class="form-select" required>
@@ -122,12 +149,16 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
             <option value="cartao">Cartão</option>
           </select>
         </div>
+
+        <!-- Troco -->
         <div class="mb-3">
           <label class="form-label"><strong>Troco (MT):</strong></label>
           <input type="text" id="troco" class="form-control fw-bold" readonly>
         </div>
       </div>
+
       <div class="modal-footer">
+        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#finalizarEmailModal">📧 Finalizar e Enviar por Email</button>
         <button type="submit" name="finalizar_venda" class="btn btn-primary">Confirmar</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
       </div>
@@ -135,75 +166,277 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
   </div>
 </div>
 
+<!-- Modal Finalizar e Enviar por Email -->
+<div class="modal fade" id="finalizarEmailModal" tabindex="-1" aria-labelledby="finalizarEmailLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" class="modal-content" id="formFinalizarEmail">
+      <div class="modal-header">
+        <h5 class="modal-title" id="finalizarEmailLabel">Finalizar e Enviar Recibo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Valor total exibido com desconto (se aplicado na lógica JS) -->
+        <p><strong>Total: </strong><span id="total_valor">MT <?= number_format($total, 2, ',', '.') ?></span></p>
+
+        <!-- Email do cliente -->
+        <div class="mb-3">
+          <label for="email_destino" class="form-label">Email do Cliente:</label>
+          <input type="email" name="email_destino" id="email_destino" class="form-control" required>
+        </div>
+
+        <!-- Mensagem opcional -->
+        <div class="mb-3">
+          <label for="mensagem_email" class="form-label">Mensagem (opcional):</label>
+          <textarea name="mensagem_email" id="mensagem_email" rows="3" class="form-control"></textarea>
+        </div>
+
+        <!-- Valor pago no modal de email -->
+        <div class="mb-3">
+          <label for="valor_pago_email" class="form-label">Valor Pago (MT):</label>
+          <input type="number" step="0.01" min="0" name="valor_pago_email" id="valor_pago_email" class="form-control" required />
+        </div>
+
+        <!-- Método de pagamento -->
+        <div class="mb-3">
+          <label for="metodo_pagamento_email" class="form-label">Método de Pagamento:</label>
+          <select name="metodo_pagamento_email" id="metodo_pagamento_email" class="form-select" required>
+            <option value="">-- Selecione --</option>
+            <option value="mpesa">M-Pesa</option>
+            <option value="emola">E-Mola</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="cartao">Cartão</option>
+          </select>
+        </div>
+
+        <!-- Troco para e-mail -->
+        <div class="mb-3">
+          <label class="form-label"><strong>Troco (MT):</strong></label>
+          <input type="text" id="troco_email" class="form-control fw-bold" readonly>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="submit" name="finalizar_enviar" class="btn btn-success">Enviar Recibo</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Modal de Autorização -->
+<div class="modal fade" id="modalAutorizacao" tabindex="-1" aria-labelledby="autorizacaoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="formAutorizacao" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="autorizacaoLabel">Autorização Necessária</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="codigoProduto" name="codigo">
+        <div class="mb-3">
+          <label for="senha_autorizacao" class="form-label">Senha de gerente ou supervisor:</label>
+          <input type="password" class="form-control" id="senha_autorizacao" required>
+        </div>
+        <div id="erro_autorizacao" class="text-danger small d-none">Senha incorreta ou sem permissão.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Confirmar</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 <!-- Scripts -->
 <script src="../bootstrap/bootstrap-5.3.3/jquery/jquery.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const form = document.getElementById("formFinalizarVenda");
+document.addEventListener("DOMContentLoaded", () => {
+  const totalOriginal = <?= $total ?>;
 
-    if (form) {
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
+  // --- ELEMENTOS DO MODAL DE VENDA NORMAL ---
+  const formVenda = document.getElementById("formFinalizarVenda");
+  const valorPagoVendaInput = document.getElementById("valor_pago");
+  const trocoVendaInput = document.getElementById("troco");
 
-        const formData = new FormData(form);
-        formData.append("finalizar_venda", "1");
+  // --- ELEMENTOS DO MODAL DE EMAIL ---
+  const formEmail = document.getElementById("formFinalizarEmail");
+  const valorPagoEmailInput = document.getElementById("valor_pago_email");
+  const trocoEmailInput = document.getElementById("troco_email");
 
-        try {
-          const response = await fetch("venda.php", {
-            method: "POST",
-            body: formData,
-            headers: { "X-Requested-With": "XMLHttpRequest" }
-          });
+  // --- ELEMENTOS COMUNS ---
+  const descontoCheckbox = document.getElementById("desconto_colaborador");
+  const totalSpan = document.getElementById("total_valor");
 
-          const data = await response.json();
+  // --- FORMATAÇÃO ---
+  function formatarMT(valor) {
+    return "MT " + valor.toFixed(2).replace(".", ",");
+  }
 
-          if (data.success) {
-            const link = document.createElement("a");
-            link.href = data.pdfPath;
-            link.download = `recibo_venda_${data.venda_id}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+  function obterTotalComDesconto() {
+    return descontoCheckbox?.checked ? totalOriginal * 0.9 : totalOriginal;
+  }
 
-            setTimeout(() => {
-              location.href = "venda.php";
-            }, 1000);
-          } else {
-            alert(data.mensagem || "Erro ao finalizar venda.");
-          }
-        } catch (err) {
-          alert("Erro de requisição: " + err.message);
-        }
-      });
+  // --- ATUALIZAÇÃO DO TOTAL E TROCO ---
+  function atualizarTotais() {
+    const total = obterTotalComDesconto();
+    totalSpan.textContent = formatarMT(total);
+
+    // Troco da venda normal
+    if (valorPagoVendaInput && trocoVendaInput) {
+      const pagoVenda = parseFloat(valorPagoVendaInput.value) || 0;
+      const trocoVenda = Math.max(pagoVenda - total, 0);
+      trocoVendaInput.value = formatarMT(trocoVenda);
     }
 
-    // Troco automático
-    const valorPagoInput = document.getElementById("valor_pago");
-    const trocoInput = document.getElementById("troco");
-    valorPagoInput?.addEventListener("input", () => {
-      const valor = parseFloat(valorPagoInput.value);
-      const troco = !isNaN(valor) ? valor - <?= $total ?> : 0;
-      trocoInput.value = troco >= 0 ? troco.toFixed(2).replace('.', ',') : '0,00';
+    // Troco da venda por email
+    if (valorPagoEmailInput && trocoEmailInput) {
+      const pagoEmail = parseFloat(valorPagoEmailInput.value) || 0;
+      const trocoEmail = Math.max(pagoEmail - total, 0);
+      trocoEmailInput.value = trocoEmail.toFixed(2).replace(".", ",");
+    }
+  }
+
+  descontoCheckbox?.addEventListener("change", atualizarTotais);
+  valorPagoVendaInput?.addEventListener("input", atualizarTotais);
+  valorPagoEmailInput?.addEventListener("input", atualizarTotais);
+  atualizarTotais();
+
+  // --- FINALIZAR VENDA NORMAL ---
+  formVenda?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(formVenda);
+    formData.append("finalizar_venda", "1");
+
+    try {
+      const response = await fetch("venda.php", {
+        method: "POST",
+        body: formData,
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const link = document.createElement("a");
+        link.href = data.pdfPath;
+        link.download = `recibo_venda_${data.venda_id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => location.href = "venda.php", 1000);
+      } else {
+        alert(data.mensagem || "Erro ao finalizar venda.");
+      }
+    } catch (err) {
+      alert("Erro de requisição: " + err.message);
+    }
+  });
+
+  // --- FINALIZAR VENDA POR EMAIL ---
+  formEmail?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(formEmail);
+    formData.append("finalizar_enviar", "1");
+
+    try {
+      const response = await fetch("venda.php", {
+        method: "POST",
+        body: formData,
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("Recibo enviado com sucesso para " + formData.get("email_destino"));
+        setTimeout(() => location.href = "venda.php", 1000);
+      } else {
+        alert(data.mensagem || "Erro ao enviar e finalizar a venda.");
+      }
+    } catch (err) {
+      alert("Erro de requisição: " + err.message);
+    }
+  });
+
+  // --- ATALHO F9 PARA FINALIZAR ---
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "F9") {
+      event.preventDefault();
+      const finalizarModal = new bootstrap.Modal(document.getElementById("finalizarModal"));
+      finalizarModal.show();
+    }
+  });
+
+  // --- FOCO AO ABRIR MODAIS ---
+  document.getElementById("finalizarModal")?.addEventListener("shown.bs.modal", () => {
+    valorPagoVendaInput?.focus();
+  });
+
+  document.getElementById("finalizarEmailModal")?.addEventListener("shown.bs.modal", () => {
+    document.getElementById("email_destino")?.focus();
+  });
+
+  // --- AUTORIZAÇÃO PARA REMOVER PRODUTO ---
+  const authModal = new bootstrap.Modal(document.getElementById("modalAutorizacao"));
+  const senhaInput = document.getElementById("senha_autorizacao");
+  const codigoInput = document.getElementById("codigoProduto");
+  const authError = document.getElementById("erro_autorizacao");
+
+  document.querySelectorAll(".btn-remover").forEach(btn => {
+    btn.addEventListener("click", () => {
+      authError.classList.add("d-none");
+      senhaInput.value = "";
+      codigoInput.value = btn.dataset.codigo;
+      authModal.show();
+      senhaInput.focus();
     });
   });
 
-  document.addEventListener("keydown", function(event) {
-  if (event.key === "F9") {
-    event.preventDefault(); // evita que o navegador faça outra ação padrão do F9
-    const finalizarModal = new bootstrap.Modal(document.getElementById('finalizarModal'));
-    finalizarModal.show();
-  }
-});
+  document.getElementById("formAutorizacao")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-const finalizarModalEl = document.getElementById('finalizarModal');
-finalizarModalEl.addEventListener('shown.bs.modal', () => {
-  const valorPagoInput = document.getElementById('valor_pago');
-  if (valorPagoInput) {
-    valorPagoInput.focus();
-  }
-});
+    const senha = senhaInput.value;
+    const codigo = codigoInput.value;
+    if (!senha) return;
 
+    try {
+      const response = await fetch("validar_autorizacao.php", {
+        method: "POST",
+        body: JSON.stringify({ senha, codigo }),
+        headers: { "Content-Type": "application/json" }
+      });
+
+      const result = await response.json();
+
+      if (result.autorizado) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "venda.php";
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "remover_produto";
+        input.value = codigo;
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      } else {
+        authError.classList.remove("d-none");
+      }
+    } catch (err) {
+      alert("Erro ao validar senha: " + err.message);
+    }
+  });
+});
 </script>
+
+
+
 </body>
 </html>

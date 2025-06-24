@@ -1,5 +1,9 @@
 <?php
 session_start();
+require_once 'log.php';
+
+registrarLog($pdo, 'backup_criado', "Backup $nome_backup criado pelo usuário $user_nome", $user_id, $user_nome);
+
 
 // Permissão e autenticação omitidos aqui
 

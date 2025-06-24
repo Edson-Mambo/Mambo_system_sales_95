@@ -29,7 +29,7 @@ class VendaController
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
         if (isset($_POST['finalizar_venda'])) {
-            $this->finalizarVenda();
+            $this->responderFinalizacaoAjax();
         } elseif (isset($_POST['adicionar'])) {
             $this->adicionarProduto();
             $this->redirecionarComMensagem();
@@ -89,24 +89,30 @@ class VendaController
         }
     }
 
-    private function finalizarVenda(): void
+    private function responderFinalizacaoAjax(): void
     {
         header('Content-Type: application/json');
 
         $valorPago = (float) ($_POST['valor_pago'] ?? 0);
-        $carrinho = $_SESSION['carrinho'] ?? [];
         $metodoPagamento = $_POST['metodo_pagamento'] ?? 'dinheiro';
 
+        $resposta = $this->finalizarVenda($valorPago, $metodoPagamento);
+
+        echo json_encode($resposta);
+    }
+
+    public function finalizarVenda(float $valorPago, string $metodoPagamento): array
+    {
+        $carrinho = $_SESSION['carrinho'] ?? [];
+
         if (empty($carrinho)) {
-            echo json_encode(['success' => false, 'mensagem' => 'Carrinho vazio.']);
-            return;
+            return ['success' => false, 'mensagem' => 'Carrinho vazio.'];
         }
 
         $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $item['quantidade']), 0);
 
         if ($valorPago < $total) {
-            echo json_encode(['success' => false, 'mensagem' => 'Valor pago insuficiente.']);
-            return;
+            return ['success' => false, 'mensagem' => 'Valor pago insuficiente.'];
         }
 
         try {
@@ -147,113 +153,243 @@ class VendaController
 
             $pdfPath = $this->gerarPdfParaArquivo($vendaId);
 
-            echo json_encode([
-                'success' => true,
-                'venda_id' => $vendaId,
-                'pdfPath' => $pdfPath
-            ]);
+            if (!$pdfPath) {
+                return ['success' => false, 'mensagem' => 'Erro ao gerar o recibo PDF. Verifique os logs.'];
+            }
+
+            return ['success' => true, 'venda_id' => $vendaId, 'pdfPath' => $pdfPath];
         } catch (PDOException $e) {
             $this->pdo->rollBack();
-            echo json_encode([
-                'success' => false,
-                'mensagem' => 'Erro ao salvar venda: ' . $e->getMessage()
-            ]);
+            return ['success' => false, 'mensagem' => 'Erro ao salvar venda: ' . $e->getMessage()];
         }
     }
 
-    private function gerarPdfParaArquivo(int $vendaId): string
-{
-    // Pega dados da venda
-    $stmtVenda = $this->pdo->prepare("SELECT v.*, u.nome AS nome_usuario FROM vendas v JOIN usuarios u ON v.usuario_id = u.id WHERE v.id = ?");
-    $stmtVenda->execute([$vendaId]);
-    $venda = $stmtVenda->fetch(PDO::FETCH_ASSOC);
+    private function gerarPdfParaArquivo(int $vendaId): ?string
+    {
+        try {
+            $stmtVenda = $this->pdo->prepare("SELECT v.*, u.nome AS nome_usuario FROM vendas v JOIN usuarios u ON v.usuario_id = u.id WHERE v.id = ?");
+            $stmtVenda->execute([$vendaId]);
+            $venda = $stmtVenda->fetch(PDO::FETCH_ASSOC);
 
-    // Pega produtos vendidos nessa venda
-    $stmtProdutos = $this->pdo->prepare("
-        SELECT p.nome, pv.quantidade, pv.preco_unitario 
-        FROM produtos_vendidos pv 
-        JOIN produtos p ON pv.produto_id = p.id 
-        WHERE pv.venda_id = ?
-    ");
-    $stmtProdutos->execute([$vendaId]);
-    $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
+            if (!$venda) {
+                error_log("Venda não encontrada para ID: $vendaId");
+                return null;
+            }
 
-    // Monta o HTML do recibo com estilos inline para Dompdf
-    $html = '
-    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; border: 1px solid #333;">
-        <h1 style="text-align:center; color: #2c3e50;">Mambo System Sales</h1>
-        <p style="text-align:center; font-size: 0.9em; margin-top: -10px;">Rua da Patria Nº 510, Aeroporto "A" - Maputo, Moçambique</p>
-        <hr style="border: 1px solid #ccc; margin: 15px 0;">
-        
-        <table style="width: 100%; font-size: 0.9em; margin-bottom: 15px;">
-            <tr>
-                <td><strong>Recibo Nº:</strong> ' . htmlspecialchars($vendaId) . '</td>
-                <td style="text-align:right;"><strong>Data:</strong> ' . date('d/m/Y H:i:s', strtotime($venda['data_venda'])) . '</td>
-            </tr>
-            <tr>
-                <td><strong>Operador:</strong> ' . htmlspecialchars($venda['nome_usuario']) . '</td>
-                <td style="text-align:right;"><strong>Método:</strong> ' . ucfirst(htmlspecialchars($venda['metodo_pagamento'])) . '</td>
-            </tr>
-        </table>
+            $stmtProdutos = $this->pdo->prepare("SELECT p.nome, pv.quantidade, pv.preco_unitario FROM produtos_vendidos pv JOIN produtos p ON pv.produto_id = p.id WHERE pv.venda_id = ?");
+            $stmtProdutos->execute([$vendaId]);
+            $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
 
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-            <thead>
-                <tr style="background-color: #34495e; color: white;">
-                    <th style="border: 1px solid #ddd; padding: 8px; text-align:left;">Produto</th>
-                    <th style="border: 1px solid #ddd; padding: 8px; text-align:center;">Qtd</th>
-                    <th style="border: 1px solid #ddd; padding: 8px; text-align:right;">Preço Unit.</th>
-                    <th style="border: 1px solid #ddd; padding: 8px; text-align:right;">Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>';
+            if (empty($produtos)) {
+                error_log("Nenhum produto encontrado para venda ID: $vendaId");
+                return null;
+            }
 
-    foreach ($produtos as $item) {
-        $subtotal = $item['quantidade'] * $item['preco_unitario'];
-        $html .= '
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">' . htmlspecialchars($item['nome']) . '</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align:center;">' . $item['quantidade'] . '</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align:right;">MT ' . number_format($item['preco_unitario'], 2, ',', '.') . '</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align:right;">MT ' . number_format($subtotal, 2, ',', '.') . '</td>
-            </tr>';
+            ob_start();
+            ?>
+            <!DOCTYPE html>
+            <html lang="pt">
+            <head>
+            <meta charset="UTF-8" />
+            <title>Recibo Venda #<?= htmlspecialchars($vendaId) ?></title>
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+            
+                body {
+                    font-family: 'Montserrat', sans-serif;
+                    font-size: 13px;
+                    margin: 30px;
+                    color: #2c3e50;
+                    background: #fff;
+                }
+            
+                header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 30px;
+                    border-bottom: 2px solid #2980b9;
+                    padding-bottom: 15px;
+                }
+            
+                header img {
+                    height: 60px;
+                }
+            
+                header .empresa {
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #2980b9;
+                }
+            
+                header .dados-recibo {
+                    text-align: right;
+                    font-size: 14px;
+                    color: #34495e;
+                }
+            
+                header .dados-recibo p {
+                    margin: 3px 0;
+                }
+            
+                section.produtos {
+                    margin-bottom: 30px;
+                }
+            
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+            
+                thead {
+                    background-color: #2980b9;
+                    color: white;
+                }
+            
+                thead th {
+                    padding: 15px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    font-size: 13px;
+                    text-align: left;
+                }
+            
+                tbody tr {
+                    border-bottom: 1px solid #ddd;
+                    transition: background-color 0.3s ease;
+                }
+            
+                tbody tr:hover {
+                    background-color: #f1f8ff;
+                }
+            
+                tbody td {
+                    padding: 12px 15px;
+                    font-size: 13px;
+                    vertical-align: middle;
+                }
+            
+                tbody td.qty, tbody td.price, tbody td.subtotal {
+                    text-align: right;
+                    font-feature-settings: "tnum";
+                    font-variant-numeric: tabular-nums;
+                }
+            
+                .totais {
+                    max-width: 350px;
+                    margin-left: auto;
+                    margin-top: 20px;
+                    border-top: 2px solid #2980b9;
+                    padding-top: 15px;
+                    font-size: 14px;
+                    color: #2c3e50;
+                }
+            
+                .totais div {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    font-weight: 600;
+                }
+            
+                .totais div span.valor {
+                    color: #2980b9;
+                }
+            
+                footer {
+                    margin-top: 40px;
+                    border-top: 1px solid #ddd;
+                    padding-top: 15px;
+                    text-align: center;
+                    font-style: italic;
+                    font-size: 12px;
+                    color: #7f8c8d;
+                }
+            </style>
+            </head>
+            <body>
+            <header>
+                <img src="https://i.imgur.com/dq4wTyf.png" alt="Logo Mambo System" />
+                <div class="empresa">Mambo System Sales</div>
+                <div class="dados-recibo">
+                    <p><strong>Recibo Nº:</strong> <?= htmlspecialchars($vendaId) ?></p>
+                    <p><strong>Data:</strong> <?= date('d/m/Y H:i:s', strtotime($venda['data_venda'])) ?></p>
+                    <p><strong>Operador:</strong> <?= htmlspecialchars($venda['nome_usuario']) ?></p>
+                </div>
+            </header>
+            
+            <section class="produtos">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th class="qty">Qtd</th>
+                            <th class="price">Preço Unit.</th>
+                            <th class="subtotal">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($produtos as $item): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($item['nome']) ?></td>
+                            <td class="qty"><?= $item['quantidade'] ?></td>
+                            <td class="price">MT <?= number_format($item['preco_unitario'], 2, ',', '.') ?></td>
+                            <td class="subtotal">MT <?= number_format($item['preco_unitario'] * $item['quantidade'], 2, ',', '.') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </section>
+            
+            <div class="totais">
+                <div><span>Total:</span> <span class="valor">MT <?= number_format($venda['total'], 2, ',', '.') ?></span></div>
+                <div><span>Pago:</span> <span class="valor">MT <?= number_format($venda['valor_pago'], 2, ',', '.') ?></span></div>
+                <div><span>Troco:</span> <span class="valor">MT <?= number_format($venda['valor_pago'] - $venda['total'], 2, ',', '.') ?></span></div>
+            </div>
+            
+            <footer>
+                <p>Obrigado pela sua preferência! Volte sempre :)</p>
+                <p>Mambo System Sales - +258 84 854 1787 - Maputo, Moçambique</p>
+            </footer>
+            </body>
+            </html>
+            <?php
+            $html = ob_get_clean();
+            
+
+            $options = new Options();
+            $options->set('isRemoteEnabled', true);
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->render();
+
+            $pasta = __DIR__ . '/../../public/recibos';
+            if (!is_dir($pasta)) {
+                mkdir($pasta, 0775, true);
+            }
+
+            $pdfPath = $pasta . "/recibo_venda_{$vendaId}.pdf";
+            $pdfWebPath = "recibos/recibo_venda_{$vendaId}.pdf";
+
+            $conteudoPdf = $dompdf->output();
+            if (!$conteudoPdf) {
+                error_log("Dompdf não gerou conteúdo para venda $vendaId");
+                return null;
+            }
+
+            $salvo = file_put_contents($pdfPath, $conteudoPdf);
+            if ($salvo === false) {
+                error_log("Falha ao salvar PDF no caminho: $pdfPath");
+                return null;
+            }
+
+            return $pdfWebPath;
+        } catch (\Throwable $e) {
+            error_log("Erro ao gerar PDF da venda $vendaId: " . $e->getMessage());
+            return null;
+        }
     }
-
-    $html .= '
-            </tbody>
-        </table>
-
-        <table style="width: 100%; font-size: 0.9em; margin-top: 10px;">
-            <tr>
-                <td style="text-align:right;"><strong>Total:</strong></td>
-                <td style="width: 120px; text-align:right;">MT ' . number_format($venda['total'], 2, ',', '.') . '</td>
-            </tr>
-            <tr>
-                <td style="text-align:right;"><strong>Valor Pago:</strong></td>
-                <td style="text-align:right;">MT ' . number_format($venda['valor_pago'], 2, ',', '.') . '</td>
-            </tr>
-            <tr>
-                <td style="text-align:right;"><strong>Troco:</strong></td>
-                <td style="text-align:right;">MT ' . number_format($venda['valor_pago'] - $venda['total'], 2, ',', '.') . '</td>
-            </tr>
-        </table>
-
-        <p style="text-align:center; margin-top: 30px; font-size: 0.9em; font-style: italic; color: #555;">
-            Muito obrigado pela preferência!<br />
-            Volte sempre!
-        </p>
-    </div>
-    ';
-
-    $options = new Options();
-    $options->set('isRemoteEnabled', true);
-    $dompdf = new Dompdf($options);
-    $dompdf->loadHtml($html);
-    $dompdf->render();
-
-    $pdfPath = __DIR__ . "/../../public/recibos/recibo_venda_{$vendaId}.pdf";
-    file_put_contents($pdfPath, $dompdf->output());
-
-    return "recibos/recibo_venda_{$vendaId}.pdf";
-}
-
 }

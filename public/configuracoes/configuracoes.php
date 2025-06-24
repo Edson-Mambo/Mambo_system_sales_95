@@ -29,9 +29,9 @@ $configuracoes = obterConfiguracoes($pdo);
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Configurações do Sistema</title>
-    <link rel="stylesheet" href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" />
 </head>
 <body>
 <div class="container mt-5">
@@ -48,7 +48,7 @@ $configuracoes = obterConfiguracoes($pdo);
             <li class="list-group-item"><strong>Endereço:</strong> <?= htmlspecialchars($configuracoes['endereco'] ?? '') ?></li>
             <li class="list-group-item"><strong>Horário de Atendimento:</strong> <?= htmlspecialchars($configuracoes['horario_atendimento'] ?? '') ?></li>
             <li class="list-group-item"><strong>Website:</strong> 
-                <a href="<?= htmlspecialchars($configuracoes['website'] ?? '#') ?>" target="_blank">
+                <a href="<?= htmlspecialchars($configuracoes['website'] ?? '#') ?>" target="_blank" rel="noopener noreferrer">
                     <?= htmlspecialchars($configuracoes['website'] ?? 'sem link') ?>
                 </a>
             </li>
@@ -69,17 +69,47 @@ $configuracoes = obterConfiguracoes($pdo);
     <!-- Ações do Sistema -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-white"><strong>Ações do Sistema</strong></div>
-        <ul class="list-group list-group-flush">
-            <li class="list-group-item"><a href="backup.php" class="btn btn-outline-secondary">Fazer Backup</a></li>
-            <li class="list-group-item"><a href="restaurar_backup.php" class="btn btn-outline-warning">Restaurar Backup</a></li>
-            <li class="list-group-item"><a href="ver_logs.php" class="btn btn-outline-info">Ver Logs</a></li>
+        <ul class="list-group list-group-flush d-flex flex-row gap-2 flex-wrap">
+            <li class="list-group-item flex-grow-1">
+                <a href="backup.php" class="btn btn-outline-secondary w-100">Fazer Backup</a>
+            </li>
+            <li class="list-group-item flex-grow-1">
+                <a href="restaurar_backup.php" class="btn btn-outline-warning w-100">Restaurar Backup</a>
+            </li>
+            <li class="list-group-item flex-grow-1">
+                <a href="ver_logs.php" class="btn btn-outline-info w-100">Ver Logs</a>
+            </li>
+            <li class="list-group-item flex-grow-1">
+                <!-- Botão para abrir modal -->
+                <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#alertEditModal">
+                    Editar Configurações
+                </button>
+            </li>
         </ul>
     </div>
 
     <div class="text-center mt-4">
-    <a href="../index_admin.php" class="btn btn-secondary">← Voltar ao Painel</a>
+        <a href="../index_admin.php" class="btn btn-secondary">← Voltar ao Painel</a>
+    </div>
 </div>
 
+<!-- Modal Editar Configurações -->
+<div class="modal fade" id="alertEditModal" tabindex="-1" aria-labelledby="alertEditLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="alertEditLabel">Editar Configurações</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        Esta funcionalidade ainda não está implementada. Deseja ir para a página de edição quando estiver pronta?
+      </div>
+      <!-- <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <a href="editar_configuracoes.php" class="btn btn-primary">Ir para Editar</a>
+      </div>-->
+    </div>
+  </div>
 </div>
 
 <script src="../../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>

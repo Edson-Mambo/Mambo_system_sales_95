@@ -9,6 +9,7 @@ return array(
     'View\\' => array($baseDir . '/src/View'),
     'Svg\\' => array($vendorDir . '/dompdf/php-svg-lib/src/Svg'),
     'Sabberworm\\CSS\\' => array($vendorDir . '/sabberworm/php-css-parser/src'),
+    'PHPMailer\\PHPMailer\\' => array($vendorDir . '/phpmailer/phpmailer/src'),
     'Model\\' => array($baseDir . '/src/Model'),
     'Masterminds\\' => array($vendorDir . '/masterminds/html5/src'),
     'FontLib\\' => array($vendorDir . '/dompdf/php-font-lib/src/FontLib'),

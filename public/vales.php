@@ -69,7 +69,6 @@ foreach ($carrinho as $item) {
     $total += $item['preco'] * $item['quantidade'];
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -78,7 +77,6 @@ foreach ($carrinho as $item) {
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="p-4">
-
 <div class="container">
     <h1 class="mb-4">Adicionar Produtos ao Vale</h1>
 
@@ -102,20 +100,23 @@ foreach ($carrinho as $item) {
         </div>
     </form>
 
-    <?php if ($clienteEncontrado): ?>
-        <div class="alert alert-success">
-            Cliente encontrado: <strong><?= htmlspecialchars($clienteEncontrado['nome']) ?></strong>, Telefone: <strong><?= htmlspecialchars($clienteEncontrado['telefone']) ?></strong>
+    <!-- Buscar vale salvo -->
+    <form method="get" action="buscar_vale.php" class="mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <input type="text" name="termo_busca" class="form-control" placeholder="Buscar vale por nome ou telefone" required>
+            </div>
+            <div class="col-md-3 d-grid">
+                <button type="submit" class="btn btn-secondary">Buscar Vale Salvo</button>
+            </div>
         </div>
-    <?php elseif (($clienteNome !== '' || $clienteTelefone !== '') && !$clienteEncontrado): ?>
-        <div class="alert alert-warning">
-            Cliente não encontrado. Será criado um novo ao finalizar o vale.
-        </div>
-    <?php endif; ?>
+    </form>
 
+    <!-- Formulário para adicionar produtos -->
     <form method="post" class="row g-3 mb-4 align-items-end">
         <div class="col-md-6">
-            <label for="busca_produto" class="form-label">Código de barras ou Nome do produto</label>
-            <input type="text" id="busca_produto" name="busca_produto" class="form-control" placeholder="Digite o código de barras ou o nome do produto" required>
+            <label for="busca_produto" class="form-label">Código ou Nome do produto</label>
+            <input type="text" id="busca_produto" name="busca_produto" class="form-control" required>
         </div>
         <div class="col-md-2">
             <label for="quantidade" class="form-label">Quantidade</label>
@@ -126,33 +127,26 @@ foreach ($carrinho as $item) {
         </div>
     </form>
 
+    <!-- Tabela de produtos -->
     <div class="table-responsive mb-4">
-        <table class="table table-bordered table-hover align-middle">
+        <table class="table table-bordered table-hover">
             <thead class="table-dark">
-                <tr>
-                    <th>Nome</th>
-                    <th>Preço Unit.</th>
-                    <th>Quantidade</th>
-                    <th>Subtotal</th>
-                    <th>Ações</th>
-                </tr>
+                <tr><th>Nome</th><th>Preço Unit.</th><th>Qtd</th><th>Subtotal</th><th>Ações</th></tr>
             </thead>
             <tbody>
-                <?php if (!empty($carrinho)) : ?>
-                    <?php foreach ($carrinho as $codigo => $item) : 
-                        $subtotal = $item['preco'] * $item['quantidade'];
-                    ?>
-                    <tr>
-                        <td><?= htmlspecialchars($item['nome']) ?></td>
-                        <td>MT <?= number_format($item['preco'], 2, ',', '.') ?></td>
-                        <td><?= $item['quantidade'] ?></td>
-                        <td>MT <?= number_format($subtotal, 2, ',', '.') ?></td>
-                        <td>
-                            <form method="post" style="display:inline;">
-                                <button type="submit" name="remover_produto" value="<?= htmlspecialchars($codigo) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Remover produto?');">Remover</button>
-                            </form>
-                        </td>
-                    </tr>
+                <?php if (!empty($carrinho)): ?>
+                    <?php foreach ($carrinho as $codigo => $item): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($item['nome']) ?></td>
+                            <td>MT <?= number_format($item['preco'], 2, ',', '.') ?></td>
+                            <td><?= $item['quantidade'] ?></td>
+                            <td>MT <?= number_format($item['preco'] * $item['quantidade'], 2, ',', '.') ?></td>
+                            <td>
+                                <form method="post">
+                                    <button type="submit" name="remover_produto" value="<?= htmlspecialchars($codigo) ?>" class="btn btn-danger btn-sm">Remover</button>
+                                </form>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr><td colspan="5" class="text-center">Carrinho vazio</td></tr>
@@ -161,27 +155,42 @@ foreach ($carrinho as $item) {
             <tfoot>
                 <tr class="table-secondary">
                     <td colspan="3" class="text-end fw-bold">Total:</td>
-                    <td class="fw-bold" colspan="2">MT <?= number_format($total, 2, ',', '.') ?></td>
+                    <td colspan="2">MT <?= number_format($total, 2, ',', '.') ?></td>
                 </tr>
             </tfoot>
         </table>
     </div>
 
-    <div class="mb-3">
-        <a href="venda.php" class="btn btn-secondary">Voltar</a>
-    </div>
-
+    <!-- Formulário salvar/finalizar -->
     <form method="post" action="salvar_vale.php">
         <input type="hidden" name="total_vale" value="<?= $total ?>">
         <input type="hidden" name="cliente_id" value="<?= $clienteEncontrado['id'] ?? '' ?>">
         <input type="hidden" name="cliente_nome" value="<?= htmlspecialchars($clienteNome) ?>">
         <input type="hidden" name="cliente_telefone" value="<?= htmlspecialchars($clienteTelefone) ?>">
-        <button type="submit" name="finalizar_vale" class="btn btn-success" <?= empty($carrinho) ? 'disabled' : '' ?>>
-            Finalizar Vale
-        </button>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="valor_pago" class="form-label">Valor Pago (MT)</label>
+                <input type="number" step="0.01" name="valor_pago" id="valor_pago" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+                <label for="tipo_pagamento" class="form-label">Tipo de Pagamento</label>
+                <select name="tipo_pagamento" id="tipo_pagamento" class="form-select" required>
+                    <option value="">Selecione</option>
+                    <option value="total">Pagamento Total</option>
+                    <option value="parcial">Pagamento Parcial</option>
+                    <option value="nenhum">Ainda não pagou</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="d-flex gap-3">
+            <button type="submit" name="acao" value="salvar" class="btn btn-warning">Salvar Vale</button>
+            <button type="submit" name="acao" value="finalizar" class="btn btn-success">Finalizar e Gerar Recibo</button>
+        </div>
     </form>
 </div>
 
-<script src="../bootstrap/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../bootstrap/bootstrap.bundle.min.js"></script>
 </body>
 </html>
