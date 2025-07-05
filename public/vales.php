@@ -1,196 +1,175 @@
+
 <?php
 session_start();
 require_once '../config/database.php';
 
 $pdo = Database::conectar();
 
-$carrinho = &$_SESSION['carrinho'];
-if (!isset($carrinho)) {
-    $_SESSION['carrinho'] = [];
-    $carrinho = &$_SESSION['carrinho'];
+
+$isAjaxSave = ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['ajax_save']));
+if ($isAjaxSave) {
+    // executa toda a lógica de inserção do vale (sem header nem exit)
+    if ($cliente_id && $total>0) {
+        // ... inserir vale e itens ...
+        echo json_encode(['success'=>true, 'message'=>"Vale #{$num} salvo com sucesso!"]);
+    } else {
+        echo json_encode(['success'=>false, 'error'=>"Selecione um cliente e adicione produtos."]);
+    }
+    exit;
 }
 
+// 1️⃣ Inicia carrinho de vale
+if (!isset($_SESSION['vale_carrinho'])) {
+    $_SESSION['vale_carrinho'] = [];
+}
+$carrinho = &$_SESSION['vale_carrinho'];
+
+// Variáveis de mensagem
+$mensagem = $_SESSION['mensagem'] ?? '';
+unset($_SESSION['mensagem']);
 $erro = '';
-$clienteEncontrado = null;
 
-function buscarProduto($pdo, $codigo) {
-    $stmt = $pdo->prepare("SELECT codigo_barra, nome, preco FROM produtos WHERE codigo_barra = ? OR nome = ?");
-    $stmt->execute([$codigo, $codigo]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
+// Recupera cliente selecionado para exibição
+$clienteSelecionadoNome = 'Nenhum cliente selecionado';
+$cliente_id = $_SESSION['cliente_id'] ?? null;
+if ($cliente_id) {
+    $stmtCli = $pdo->prepare("SELECT nome FROM clientes WHERE id = ?");
+    $stmtCli->execute([$cliente_id]);
+    if ($cli = $stmtCli->fetch(PDO::FETCH_ASSOC)) {
+        $clienteSelecionadoNome = $cli['nome'];
+    }
 }
 
-function buscarCliente($pdo, $busca) {
-    $stmt = $pdo->prepare("SELECT id, nome, telefone FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1");
-    $likeBusca = "%$busca%";
-    $stmt->execute([$likeBusca, $likeBusca]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
-}
+// Processa ações via POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-if (isset($_POST['adicionar'])) {
-    $busca = trim($_POST['busca_produto'] ?? '');
-    $quantidade = intval($_POST['quantidade'] ?? 1);
-    if ($busca !== '' && $quantidade > 0) {
-        $produto = buscarProduto($pdo, $busca);
-        if ($produto) {
-            $codigo = $produto['codigo_barra'];
-            if (isset($carrinho[$codigo])) {
-                $carrinho[$codigo]['quantidade'] += $quantidade;
+    // 🔍 Buscar cliente
+    if (isset($_POST['buscar_cliente'])) {
+        $busca = trim($_POST['cliente_nome_ou_telefone'] ?? '');
+        if ($busca !== '') {
+            $stmt = $pdo->prepare("SELECT * FROM clientes WHERE nome LIKE ? OR telefone LIKE ? LIMIT 1");
+            $stmt->execute(["%$busca%", "%$busca%"]);
+            if ($cli = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $_SESSION['cliente_id'] = $cli['id'];
+                $clienteSelecionadoNome = $cli['nome'];
             } else {
-                $carrinho[$codigo] = [
-                    'nome' => $produto['nome'],
-                    'preco' => (float)$produto['preco'],
-                    'quantidade' => $quantidade
-                ];
+                $erro = "Cliente não encontrado.";
             }
         } else {
-            $erro = "Produto não encontrado: " . htmlspecialchars($busca);
+            $erro = "Digite nome ou telefone.";
         }
-    } else {
-        $erro = "Informe um produto e quantidade válidos.";
+    }
+
+    // ➕ Cadastrar cliente
+    if (isset($_POST['cadastrar_cliente'])) {
+        $nome = trim($_POST['nome'] ?? '');
+        $telefone = trim($_POST['telefone'] ?? '');
+        if ($nome && $telefone) {
+            $stmt = $pdo->prepare("SELECT id FROM clientes WHERE telefone = ?");
+            $stmt->execute([$telefone]);
+            if ($stmt->fetch()) {
+                $erro = "Telefone já cadastrado.";
+            } else {
+                $pdo->prepare("INSERT INTO clientes (nome, telefone) VALUES (?, ?)")
+                    ->execute([$nome, $telefone]);
+                $_SESSION['cliente_id'] = $pdo->lastInsertId();
+                $clienteSelecionadoNome = $nome;
+                $mensagem = "Cliente cadastrado com sucesso!";
+            }
+        } else {
+            $erro = "Preencha nome e telefone.";
+        }
+    }
+
+    // 🛒 Adicionar produto
+    if (isset($_POST['adicionar_produto'])) {
+        $busca = trim($_POST['produto_busca'] ?? '');
+        $qtd   = (int)($_POST['quantidade'] ?? 0);
+        if ($busca && $qtd > 0) {
+            $stmt = $pdo->prepare("SELECT * FROM produtos WHERE codigo_barra = ? OR nome LIKE ? LIMIT 1");
+            $stmt->execute([$busca, "%$busca%"]);
+            if ($p = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $key = $p['id'];
+                if (isset($carrinho[$key])) {
+                    $carrinho[$key]['quantidade'] += $qtd;
+                } else {
+                    $carrinho[$key] = [
+                        'id'         => $p['id'],
+                        'nome'       => $p['nome'],
+                        'preco'      => $p['preco'],
+                        'quantidade' => $qtd,
+                    ];
+                }
+                $mensagem = "Produto adicionado: {$p['nome']}";
+            } else {
+                $erro = "Produto não encontrado.";
+            }
+        } else {
+            $erro = "Informe produto e quantidade.";
+        }
+    }
+
+    // ❌ Remover produto
+    if (isset($_POST['remover_produto'])) {
+        unset($carrinho[(int)$_POST['remover_produto']]);
+        $mensagem = "Produto removido do vale.";
+    }
+
+    // Função para total
+    function calcularTotal($itens) {
+        $s = 0;
+        foreach ($itens as $i) {
+            $s += $i['preco'] * $i['quantidade'];
+        }
+        return $s;
+    }
+    $total = calcularTotal($carrinho);
+
+    // 💾 Salvar vale (permanece na mesma página)
+    if (isset($_POST['salvar_vale'])) {
+        $cliente_id = $_POST['cliente_id'] ?? $_SESSION['cliente_id'] ?? null;
+        $status     = $_POST['status_pagamento'] ?? 'aberto';
+
+        if ($cliente_id && $total > 0) {
+            // Gera número único
+            do {
+                $num = rand(1000, 9999);
+                $chk = $pdo->prepare("SELECT 1 FROM vales WHERE numero_vale = ?");
+                $chk->execute([$num]);
+            } while ($chk->fetch());
+
+            // Insere cabeçalho do vale
+            $stmt = $pdo->prepare(
+                "INSERT INTO vales
+                  (cliente_id, numero_vale, cliente_nome, cliente_telefone, valor_total, status, saldo, data_registro)
+                 SELECT ?, ?, nome, telefone, ?, ?, ?, NOW() FROM clientes WHERE id = ?"
+            );
+            $stmt->execute([$cliente_id, $num, $total, $status, $total, $cliente_id]);
+            $vale_id = $pdo->lastInsertId();
+
+            // Insere itens
+            $stmtItem = $pdo->prepare(
+                "INSERT INTO itens_vale
+                  (vale_id, produto_id, quantidade, preco_unitario)
+                 VALUES (?, ?, ?, ?)"
+            );
+            foreach ($carrinho as $it) {
+                $stmtItem->execute([$vale_id, $it['id'], $it['quantidade'], $it['preco']]);
+            }
+
+            // Limpa carrinho, mantém cliente selecionado
+            $_SESSION['vale_carrinho'] = [];
+            $_SESSION['mensagem'] = "Vale #{$num} salvo com sucesso!";
+            $mensagem = $_SESSION['mensagem'];
+            $total = 0;
+        } else {
+            $erro = "Selecione um cliente e adicione produtos para salvar o vale.";
+        }
     }
 }
 
-if (isset($_POST['remover_produto'])) {
-    $codigoRemover = $_POST['remover_produto'];
-    if (isset($carrinho[$codigoRemover])) {
-        unset($carrinho[$codigoRemover]);
-    }
-}
 
-$clienteNome = $_POST['cliente_nome'] ?? '';
-$clienteTelefone = $_POST['cliente_telefone'] ?? '';
-if (!empty($clienteNome) || !empty($clienteTelefone)) {
-    $buscaCliente = $clienteNome ?: $clienteTelefone;
-    $clienteEncontrado = buscarCliente($pdo, $buscaCliente);
-}
-
-$total = 0;
-foreach ($carrinho as $item) {
-    $total += $item['preco'] * $item['quantidade'];
-}
+// Inclui view
+include '../src/View/view_vale_formulario.php';
 ?>
-<!DOCTYPE html>
-<html lang="pt">
-<head>
-    <meta charset="UTF-8" />
-    <title>Gerenciar Vales</title>
-    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="p-4">
-<div class="container">
-    <h1 class="mb-4">Adicionar Produtos ao Vale</h1>
 
-    <?php if (!empty($erro)): ?>
-        <div class="alert alert-danger"><?= $erro ?></div>
-    <?php endif; ?>
-
-    <form method="post" class="mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-5">
-                <label for="cliente_nome" class="form-label">Nome do Cliente</label>
-                <input type="text" id="cliente_nome" name="cliente_nome" value="<?= htmlspecialchars($clienteNome) ?>" class="form-control" placeholder="Digite o nome do cliente">
-            </div>
-            <div class="col-md-4">
-                <label for="cliente_telefone" class="form-label">Telefone do Cliente</label>
-                <input type="text" id="cliente_telefone" name="cliente_telefone" value="<?= htmlspecialchars($clienteTelefone) ?>" class="form-control" placeholder="Digite o telefone do cliente">
-            </div>
-            <div class="col-md-3 d-grid">
-                <button type="submit" class="btn btn-info">Buscar Cliente</button>
-            </div>
-        </div>
-    </form>
-
-    <!-- Buscar vale salvo -->
-    <form method="get" action="buscar_vale.php" class="mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-6">
-                <input type="text" name="termo_busca" class="form-control" placeholder="Buscar vale por nome ou telefone" required>
-            </div>
-            <div class="col-md-3 d-grid">
-                <button type="submit" class="btn btn-secondary">Buscar Vale Salvo</button>
-            </div>
-        </div>
-    </form>
-
-    <!-- Formulário para adicionar produtos -->
-    <form method="post" class="row g-3 mb-4 align-items-end">
-        <div class="col-md-6">
-            <label for="busca_produto" class="form-label">Código ou Nome do produto</label>
-            <input type="text" id="busca_produto" name="busca_produto" class="form-control" required>
-        </div>
-        <div class="col-md-2">
-            <label for="quantidade" class="form-label">Quantidade</label>
-            <input type="number" id="quantidade" name="quantidade" min="1" value="1" class="form-control" required>
-        </div>
-        <div class="col-md-4 d-grid">
-            <button type="submit" name="adicionar" class="btn btn-primary">Adicionar Produto</button>
-        </div>
-    </form>
-
-    <!-- Tabela de produtos -->
-    <div class="table-responsive mb-4">
-        <table class="table table-bordered table-hover">
-            <thead class="table-dark">
-                <tr><th>Nome</th><th>Preço Unit.</th><th>Qtd</th><th>Subtotal</th><th>Ações</th></tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($carrinho)): ?>
-                    <?php foreach ($carrinho as $codigo => $item): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($item['nome']) ?></td>
-                            <td>MT <?= number_format($item['preco'], 2, ',', '.') ?></td>
-                            <td><?= $item['quantidade'] ?></td>
-                            <td>MT <?= number_format($item['preco'] * $item['quantidade'], 2, ',', '.') ?></td>
-                            <td>
-                                <form method="post">
-                                    <button type="submit" name="remover_produto" value="<?= htmlspecialchars($codigo) ?>" class="btn btn-danger btn-sm">Remover</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr><td colspan="5" class="text-center">Carrinho vazio</td></tr>
-                <?php endif; ?>
-            </tbody>
-            <tfoot>
-                <tr class="table-secondary">
-                    <td colspan="3" class="text-end fw-bold">Total:</td>
-                    <td colspan="2">MT <?= number_format($total, 2, ',', '.') ?></td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <!-- Formulário salvar/finalizar -->
-    <form method="post" action="salvar_vale.php">
-        <input type="hidden" name="total_vale" value="<?= $total ?>">
-        <input type="hidden" name="cliente_id" value="<?= $clienteEncontrado['id'] ?? '' ?>">
-        <input type="hidden" name="cliente_nome" value="<?= htmlspecialchars($clienteNome) ?>">
-        <input type="hidden" name="cliente_telefone" value="<?= htmlspecialchars($clienteTelefone) ?>">
-
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <label for="valor_pago" class="form-label">Valor Pago (MT)</label>
-                <input type="number" step="0.01" name="valor_pago" id="valor_pago" class="form-control" required>
-            </div>
-            <div class="col-md-6">
-                <label for="tipo_pagamento" class="form-label">Tipo de Pagamento</label>
-                <select name="tipo_pagamento" id="tipo_pagamento" class="form-select" required>
-                    <option value="">Selecione</option>
-                    <option value="total">Pagamento Total</option>
-                    <option value="parcial">Pagamento Parcial</option>
-                    <option value="nenhum">Ainda não pagou</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="d-flex gap-3">
-            <button type="submit" name="acao" value="salvar" class="btn btn-warning">Salvar Vale</button>
-            <button type="submit" name="acao" value="finalizar" class="btn btn-success">Finalizar e Gerar Recibo</button>
-        </div>
-    </form>
-</div>
-
-<script src="../bootstrap/bootstrap.bundle.min.js"></script>
-</body>
-</html>

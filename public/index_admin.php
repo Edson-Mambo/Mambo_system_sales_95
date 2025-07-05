@@ -63,6 +63,11 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
         <li class="nav-item">
           <a class="nav-link" href="listar_takeaway.php">Listar Take Away</a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link" href="listar_vales.php">Listar Vales</a>
+        </li>
+
+        
 
         <!-- Dropdown Relatórios -->
         <li class="nav-item dropdown">

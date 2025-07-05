@@ -3,7 +3,28 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+$stmt = $pdo->prepare("
+    SELECT v.*, c.nome AS cliente_nome, c.id AS cliente_id
+    FROM vendas v
+    LEFT JOIN clientes c ON v.cliente_id = c.id
+    WHERE v.id = ?
+");
+
+//$clienteSelecionado = null;
+//if (isset($_SESSION['cliente_id'])) {
+ //   $clienteId = $_SESSION['cliente_id'];
+  ////  $stmt = $pdo->prepare("SELECT * FROM clientes WHERE id = ?");
+   // $stmt->execute([$clienteId]);
+   // $clienteSelecionado = $stmt->fetch(PDO::FETCH_ASSOC);
+//}
+
+$id_venda = isset($_GET['id_venda']) ? intval($_GET['id_venda']) : null;
+
+$venda = $stmt->fetch(PDO::FETCH_ASSOC);
+
 $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $item['quantidade']), 0);
+
+
 ?>
 
 <!DOCTYPE html>
@@ -20,17 +41,35 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
 </head>
 <body>
 <div class="container mt-4">
-  <!-- Cabeçalho -->
-  <div class="d-flex justify-content-between align-items-center p-2 bg-white border rounded shadow-sm mb-3 flex-wrap gap-2">
+  <!-- Cabeçalho Venda -->
+<div class="p-3 bg-white border rounded shadow-sm mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
     <h5 class="mb-0 text-primary">Mambo System Sales</h5>
-    <div class="text-muted small d-flex flex-wrap align-items-center gap-3">
-      <span><strong>Usuário:</strong> <?= htmlspecialchars($usuario_nome) ?></span>
-      <span><strong>Recibo nº:</strong> <?= htmlspecialchars($numero_recibo) ?></span>
+
+    <div class="text-muted small">
+      <span class="me-3"><strong>Usuário:</strong> <?= htmlspecialchars($usuario_nome) ?></span>
+      <span class="me-3"><strong>Recibo nº:</strong> <?= htmlspecialchars($numero_recibo) ?></span>
       <span><strong>Data/Hora:</strong> <?= date('d/m/Y H:i:s') ?></span>
     </div>
-    <a href="vales.php" class="btn btn-sm btn-outline-secondary">🔁 Ir para Vale</a>
-    <a href="logout.php" class="btn btn-sm btn-outline-danger">🔒 Terminar Sessão</a>
+
+    <div class="d-flex flex-wrap align-items-center gap-2">
+  <div class="d-flex align-items-center">
+    <strong class="me-2">Cliente:</strong>
+    <span id="clienteSelecionadoTexto" class="text-primary fst-italic">
+      <?= isset($clienteSelecionado) && $clienteSelecionado ? htmlspecialchars($clienteSelecionado['nome']) : 'Nenhum cliente selecionado' ?>
+    </span>
+    <input type="hidden" id="clienteSelecionadoId" name="cliente_id" value="<?= isset($clienteSelecionado) && $clienteSelecionado ? $clienteSelecionado['id'] : '' ?>">
   </div>
+  <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalCadastrarCliente">➕ Cadastrar Cliente</button>
+  <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalBuscarCliente">🔍 Buscar Cliente</button>
+  <a href="vales.php" class="btn btn-sm btn-outline-secondary">🔁 Ir para Vale</a>
+  <a href="logout.php" class="btn btn-sm btn-outline-danger">🔒 Terminar Sessão</a>
+</div>
+
+
+  </div>
+</div>
+
 
   <!-- Mensagem -->
   <?php if (!empty($mensagem)) : ?>
@@ -103,6 +142,69 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
     </table>
   </div>
 </div>
+<!-- Modal Cadastrar Cliente -->
+<div class="modal fade" id="modalCadastrarCliente" tabindex="-1" aria-labelledby="modalCadastrarClienteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="formCadastrarCliente" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalCadastrarClienteLabel">Cadastrar Novo Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="nome_cliente" class="form-label">Nome</label>
+          <input type="text" id="nome_cliente" name="nome_cliente" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="apelido_cliente" class="form-label">Apelido (opcional)</label>
+          <input type="text" id="apelido_cliente" name="apelido_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="telefone_cliente" class="form-label">Telefone</label>
+          <input type="tel" id="telefone_cliente" name="telefone_cliente" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="telefone_alt_cliente" class="form-label">Telefone Alternativo (opcional)</label>
+          <input type="tel" id="telefone_alt_cliente" name="telefone_alt_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="email_cliente" class="form-label">Email (opcional)</label>
+          <input type="email" id="email_cliente" name="email_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="morada_cliente" class="form-label">Morada (opcional)</label>
+          <textarea id="morada_cliente" name="morada_cliente" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Salvar Cliente</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Buscar Cliente -->
+<div class="modal fade" id="modalBuscarCliente" tabindex="-1" aria-labelledby="modalBuscarClienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBuscarClienteLabel">Buscar Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formBuscarCliente" class="mb-3 d-flex gap-2">
+          <input type="text" id="buscar_cliente_input" placeholder="Nome ou Telefone" class="form-control" autofocus>
+          <button type="submit" class="btn btn-primary">Buscar</button>
+        </form>
+        <div id="resultado_busca_cliente" style="max-height:300px; overflow-y:auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Finalizar Venda -->
 <div class="modal fade" id="finalizarModal" tabindex="-1" aria-labelledby="finalizarLabel" aria-hidden="true">
@@ -150,6 +252,11 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
           </select>
         </div>
 
+        <div class="mb-3 d-none" id="div_numero_autorizacao">
+          <label for="numero_autorizacao" class="form-label">Número do Cartão ou Autorização:</label>
+          <input type="text" name="numero_autorizacao" id="numero_autorizacao" class="form-control" />
+        </div>
+
         <!-- Troco -->
         <div class="mb-3">
           <label class="form-label"><strong>Troco (MT):</strong></label>
@@ -163,6 +270,70 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal Cadastrar Cliente -->
+<div class="modal fade" id="modalCadastrarCliente" tabindex="-1" aria-labelledby="modalCadastrarClienteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="formCadastrarCliente" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalCadastrarClienteLabel">Cadastrar Novo Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="nome_cliente" class="form-label">Nome</label>
+          <input type="text" id="nome_cliente" name="nome_cliente" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="apelido_cliente" class="form-label">Apelido (opcional)</label>
+          <input type="text" id="apelido_cliente" name="apelido_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="telefone_cliente" class="form-label">Telefone</label>
+          <input type="tel" id="telefone_cliente" name="telefone_cliente" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="telefone_alt_cliente" class="form-label">Telefone Alternativo (opcional)</label>
+          <input type="tel" id="telefone_alt_cliente" name="telefone_alt_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="email_cliente" class="form-label">Email (opcional)</label>
+          <input type="email" id="email_cliente" name="email_cliente" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label for="morada_cliente" class="form-label">Morada (opcional)</label>
+          <textarea id="morada_cliente" name="morada_cliente" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Salvar Cliente</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Buscar Cliente -->
+<div class="modal fade" id="modalBuscarCliente" tabindex="-1" aria-labelledby="modalBuscarClienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBuscarClienteLabel">Buscar Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formBuscarCliente" class="mb-3 d-flex gap-2">
+          <input type="text" id="buscar_cliente_input" placeholder="Nome ou Telefone" class="form-control" autofocus>
+          <button type="submit" class="btn btn-primary">Buscar</button>
+        </form>
+        <div id="resultado_busca_cliente" style="max-height:300px; overflow-y:auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -207,6 +378,11 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
             <option value="cartao">Cartão</option>
           </select>
         </div>
+        <div class="mb-3 d-none" id="div_numero_autorizacao_email">
+          <label for="numero_autorizacao_email" class="form-label">Número do Cartão ou Autorização:</label>
+          <input type="text" name="numero_autorizacao_email" id="numero_autorizacao_email" class="form-control" />
+        </div>
+
 
         <!-- Troco para e-mail -->
         <div class="mb-3">
@@ -252,6 +428,36 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
 <!-- Scripts -->
 <script src="../bootstrap/bootstrap-5.3.3/jquery/jquery.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const metodo = document.getElementById('metodo_pagamento');
+  const divAuth = document.getElementById('div_numero_autorizacao');
+
+  metodo.addEventListener('change', () => {
+    const valor = metodo.value;
+    if (valor === 'dinheiro' || valor === '') {
+      divAuth.classList.add('d-none');
+    } else {
+      divAuth.classList.remove('d-none');
+    }
+  });
+
+  const metodoEmail = document.getElementById('metodo_pagamento_email');
+  const divAuthEmail = document.getElementById('div_numero_autorizacao_email');
+
+  metodoEmail.addEventListener('change', () => {
+    const valor = metodoEmail.value;
+    if (valor === 'dinheiro' || valor === '') {
+      divAuthEmail.classList.add('d-none');
+    } else {
+      divAuthEmail.classList.remove('d-none');
+    }
+  });
+});
+</script>
+
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -304,6 +510,8 @@ document.addEventListener("DOMContentLoaded", () => {
   valorPagoVendaInput?.addEventListener("input", atualizarTotais);
   valorPagoEmailInput?.addEventListener("input", atualizarTotais);
   atualizarTotais();
+
+  
 
   // --- FINALIZAR VENDA NORMAL ---
   formVenda?.addEventListener("submit", async (e) => {
@@ -382,57 +590,146 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // --- AUTORIZAÇÃO PARA REMOVER PRODUTO ---
-  const authModal = new bootstrap.Modal(document.getElementById("modalAutorizacao"));
-  const senhaInput = document.getElementById("senha_autorizacao");
-  const codigoInput = document.getElementById("codigoProduto");
-  const authError = document.getElementById("erro_autorizacao");
+const authModal = new bootstrap.Modal(document.getElementById("modalAutorizacao"));
+const senhaInput = document.getElementById("senha_autorizacao");
+const codigoInput = document.getElementById("codigoProduto");
+const authError = document.getElementById("erro_autorizacao");
 
-  document.querySelectorAll(".btn-remover").forEach(btn => {
-    btn.addEventListener("click", () => {
-      authError.classList.add("d-none");
-      senhaInput.value = "";
-      codigoInput.value = btn.dataset.codigo;
-      authModal.show();
-      senhaInput.focus();
+document.querySelectorAll(".btn-remover").forEach(btn => {
+  btn.addEventListener("click", () => {
+    authError.classList.add("d-none");
+    senhaInput.value = "";
+    codigoInput.value = btn.dataset.codigo;
+    authModal.show();
+    senhaInput.focus();
+  });
+});
+
+document.getElementById("formAutorizacao")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const senha = senhaInput.value.trim();
+  const codigo = codigoInput.value;
+  if (!senha) return;
+
+  try {
+    const response = await fetch("validar_autorizacao.php", {
+      method: "POST",
+      body: JSON.stringify({ senha, codigo }),
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const result = await response.json();
+
+    if (result.autorizado) {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "venda.php";
+
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "remover_produto";
+      input.value = codigo;
+
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    } else {
+      authError.classList.remove("d-none");
+    }
+  } catch (err) {
+    alert("Erro ao validar senha: " + err.message);
+  }
+});
+
+
+
+$(document).ready(function() {
+
+  // --- UTIL: Atualiza cliente selecionado em todos os campos ---
+  function setClienteSelecionado(id, nome) {
+    $('#clienteSelecionadoTexto').text(nome);
+    $('#clienteSelecionadoId').val(id);
+    $('#clienteSelecionadoTextoSalvar').text(nome);
+    $('#cliente_id_salvar').val(id);
+    $('#cliente_id_finalizar').val(id);
+  }
+
+  // --- CADASTRAR CLIENTE ---
+  $('#formCadastrarCliente').submit(function(e) {
+    e.preventDefault();
+    const dados = $(this).serialize();
+    $.post('salvar_cliente_ajax.php', dados, function(res) {
+      if (res.success) {
+        alert('Cliente cadastrado!');
+        setClienteSelecionado(res.cliente.id, res.cliente.nome);
+        $('#modalCadastrarCliente').modal('hide');
+        $('#formCadastrarCliente')[0].reset();
+      } else {
+        alert('Erro: ' + res.mensagem);
+      }
+    }, 'json').fail(function(jqXHR, textStatus, errorThrown) {
+      console.error('Erro AJAX:', textStatus, errorThrown);
+      console.error('Resposta do servidor:', jqXHR.responseText);
+      alert('Erro na requisição: ' + textStatus);
     });
   });
 
-  document.getElementById("formAutorizacao")?.addEventListener("submit", async (e) => {
+  // --- BUSCAR CLIENTE ---
+  $('#formBuscarCliente').submit(function(e) {
     e.preventDefault();
-
-    const senha = senhaInput.value;
-    const codigo = codigoInput.value;
-    if (!senha) return;
-
-    try {
-      const response = await fetch("validar_autorizacao.php", {
-        method: "POST",
-        body: JSON.stringify({ senha, codigo }),
-        headers: { "Content-Type": "application/json" }
-      });
-
-      const result = await response.json();
-
-      if (result.autorizado) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "venda.php";
-
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "remover_produto";
-        input.value = codigo;
-
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-      } else {
-        authError.classList.remove("d-none");
-      }
-    } catch (err) {
-      alert("Erro ao validar senha: " + err.message);
+    const termo = $('#buscar_cliente_input').val().trim();
+    if (termo.length < 2) {
+      alert('Digite pelo menos 2 caracteres para buscar.');
+      return;
     }
+
+    $.get('buscar_cliente_ajax.php', { q: termo }, function(res) {
+      if (res.length === 0) {
+        $('#resultado_busca_cliente').html('<p class="text-danger">Nenhum cliente encontrado.</p>');
+      } else {
+        let html = '<ul class="list-group">';
+        res.forEach(cliente => {
+          html += `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <strong>${cliente.nome}</strong> (${cliente.telefone})
+              </div>
+              <button class="btn btn-sm btn-success selecionar-cliente" data-id="${cliente.id}" data-nome="${cliente.nome}">Selecionar</button>
+            </li>
+          `;
+        });
+        html += '</ul>';
+        $('#resultado_busca_cliente').html(html);
+      }
+    }, 'json').fail(function() {
+      $('#resultado_busca_cliente').html('<p class="text-danger">Erro na requisição.</p>');
+    });
   });
+
+  // --- CLICAR EM SELECIONAR CLIENTE ---
+  $('#resultado_busca_cliente').on('click', '.selecionar-cliente', function() {
+    const id = $(this).data('id');
+    const nome = $(this).data('nome');
+
+    $.post('buscar_cliente_ajax.php', { cliente_id: id }, function(res) {
+      if (res.success) {
+        setClienteSelecionado(id, nome);
+        $('#modalBuscarCliente').modal('hide');
+        $('#resultado_busca_cliente').empty();
+        $('#buscar_cliente_input').val('');
+      } else {
+        alert('Erro ao selecionar cliente.');
+      }
+    }, 'json').fail(function() {
+      alert('Erro na requisição.');
+    });
+  });
+
+});
+
+
+
 });
 </script>
 

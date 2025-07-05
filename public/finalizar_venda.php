@@ -58,6 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmtMov->execute([$produto_id, $quantidade, $dataHora, $usuario_id, "Venda Nº $numero_recibo"]);
     }
 
+    // Limpa cliente selecionado da sessão
+        unset($_SESSION['cliente_id']);
+        
     // Limpa carrinho
     unset($_SESSION['carrinho']);
 
