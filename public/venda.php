@@ -1,5 +1,8 @@
 <?php
 session_start();
+require_once __DIR__ . '/configuracoes/logMiddleware.php';
+
+
 
 // Mostrar erros para desenvolvimento (remova em produção)
 ini_set('display_errors', 1);
@@ -93,6 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_enviar'])) 
         exit;
     }
 
+    
+    //Logica de enviar o email
     try {
         $mail = new PHPMailer(true);
         $mail->isSMTP();

@@ -361,6 +361,7 @@ class VendaController
                     <p><strong>Data:</strong> <?= date('d/m/Y H:i:s', strtotime($venda['data_venda'])) ?></p>
                     <p><strong>Operador:</strong> <?= htmlspecialchars($venda['nome_usuario']) ?></p>
                     <p><strong>Tel:</strong> +258 84 854 1787</p>
+                    <p><strong>E-mail:</strong> info@mambosystem95.com</p>
                     <p><strong>Local:</strong> Maputo, Moçambique</p>
                 
                 <br>

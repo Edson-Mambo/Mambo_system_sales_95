@@ -29,6 +29,7 @@ $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8" />
     <title>Vales Não Finalizados</title>
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </head>
 <body class="p-4">
 <div class="container">
@@ -89,5 +90,6 @@ $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script src="../bootstrap/bootstrap.bundle.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </body>
 </html>

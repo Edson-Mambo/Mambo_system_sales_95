@@ -27,6 +27,7 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
     <meta charset="UTF-8">
     <title>Mambo System 95 - Supervisor</title>
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">

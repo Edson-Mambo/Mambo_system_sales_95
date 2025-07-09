@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../config/database.php';
 
+
 // Conexão
 $pdo = Database::conectar();
 
@@ -428,7 +429,7 @@ foreach ($carrinho as $item) {
 
 
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 <script>
 $(function() {
 

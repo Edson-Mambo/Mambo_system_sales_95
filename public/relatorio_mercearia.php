@@ -16,7 +16,7 @@ FROM produtos_vendidos pv
 JOIN produtos p ON pv.produto_id = p.id
 JOIN categorias c ON p.categoria_id = c.id
 JOIN vendas v ON pv.venda_id = v.id
-WHERE c.nome = 'Produtos da Mercearia'
+WHERE c.nome = 'Food'
 GROUP BY data, p.id
 ORDER BY data DESC, total_valor DESC
 ";

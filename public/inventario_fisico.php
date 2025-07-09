@@ -195,5 +195,6 @@ unset($_SESSION['mensagem']);
   </div>
 
 <script src="../assets/bootstrap.bundle.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 require_once '../config/database.php';
 
 session_start();
-include 'helpers/voltar_menu.php'; 
+include 'helpers/voltar_menu.php';
 
 $mensagem = '';
 $nivels_validos = ['caixa', 'supervisor', 'gerente', 'admin', 'store', 'teka_away'];
@@ -29,17 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hashSenha = password_hash($senha, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)");
                 if ($stmt->execute([$nome, $email, $hashSenha, $nivel])) {
-                    // Redireciona conforme nível
-                    if ($nivel === 'store') {
-                        header("Location: store_menu.php");
-                        exit;
-                    } elseif ($nivel === 'teka_away') {
-                        header("Location: teka_away_menu.php");
-                        exit;
-                    } else {
-                        header("Location: painel_admin.php");
-                        exit;
-                    }
+                    $mensagem = "Usuário cadastrado com sucesso!";
                 } else {
                     $mensagem = "Erro ao inserir usuário.";
                 }
@@ -62,7 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h2 class="mb-4">Cadastro de Usuário</h2>
 
     <?php if ($mensagem): ?>
-        <div class="alert alert-danger"><?= htmlspecialchars($mensagem) ?></div>
+        <div class="alert <?= strpos($mensagem, 'sucesso') !== false ? 'alert-success' : 'alert-danger' ?>">
+            <?= htmlspecialchars($mensagem) ?>
+        </div>
     <?php endif; ?>
 
     <form method="POST" action="cadastrar_usuario.php" class="w-50 mx-auto">

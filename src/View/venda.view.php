@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+
 $stmt = $pdo->prepare("
     SELECT v.*, c.nome AS cliente_nome, c.id AS cliente_id
     FROM vendas v
@@ -41,6 +42,7 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
 </head>
 <body>
 <div class="container mt-4">
+
   <!-- Cabeçalho Venda -->
 <div class="p-3 bg-white border rounded shadow-sm mb-4">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
@@ -53,19 +55,46 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
     </div>
 
     <div class="d-flex flex-wrap align-items-center gap-2">
-  <div class="d-flex align-items-center">
-    <strong class="me-2">Cliente:</strong>
-    <span id="clienteSelecionadoTexto" class="text-primary fst-italic">
-      <?= isset($clienteSelecionado) && $clienteSelecionado ? htmlspecialchars($clienteSelecionado['nome']) : 'Nenhum cliente selecionado' ?>
-    </span>
-    <input type="hidden" id="clienteSelecionadoId" name="cliente_id" value="<?= isset($clienteSelecionado) && $clienteSelecionado ? $clienteSelecionado['id'] : '' ?>">
-  </div>
-  <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalCadastrarCliente">➕ Cadastrar Cliente</button>
-  <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalBuscarCliente">🔍 Buscar Cliente</button>
-  <a href="vales.php" class="btn btn-sm btn-outline-secondary">🔁 Ir para Vale</a>
-  <a href="logout.php" class="btn btn-sm btn-outline-danger">🔒 Terminar Sessão</a>
-</div>
+      <div class="d-flex align-items-center">
+        <strong class="me-2">Cliente:</strong>
+        <span id="clienteSelecionadoTexto" class="text-primary fst-italic">
+          <?= isset($clienteSelecionado) && $clienteSelecionado ? htmlspecialchars($clienteSelecionado['nome']) : 'Nenhum cliente selecionado' ?>
+        </span>
+        <input type="hidden" id="clienteSelecionadoId" name="cliente_id"
+          value="<?= isset($clienteSelecionado) && $clienteSelecionado ? $clienteSelecionado['id'] : '' ?>">
+      </div>
 
+      <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalCadastrarCliente">
+        ➕ Cadastrar Cliente
+      </button>
+
+      <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalBuscarCliente">
+        🔍 Buscar Cliente
+      </button>
+
+      <a href="vales.php" class="btn btn-sm btn-outline-secondary">
+        🔁 Ir para Vale
+      </a>
+
+      <!-- Botões de Fatura e Cotação -->
+      <a href="factura_cotacao.php?tipo=factura&venda_id=<?= htmlspecialchars($numero_recibo) ?>"
+        class="btn btn-sm btn-outline-primary">
+        🧾 Gerar Fatura
+      </a>
+
+      <a href="../src/View/cotacao.view.php?tipo=cotacao&venda_id=<?= htmlspecialchars($numero_recibo) ?>"
+   class="btn btn-sm btn-outline-success">
+   📄 Gerar Cotação
+</a>
+<!-- Botão que abre o modal -->
+<button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#enviarReciboModal">
+  📲 Enviar Recibo via WhatsApp
+</button>
+
+  <a href="logout.php" class="btn btn-sm btn-outline-danger">
+    🔒 Terminar Sessão
+  </a>
+</div>
 
   </div>
 </div>
@@ -142,6 +171,8 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
     </table>
   </div>
 </div>
+
+
 <!-- Modal Cadastrar Cliente -->
 <div class="modal fade" id="modalCadastrarCliente" tabindex="-1" aria-labelledby="modalCadastrarClienteLabel" aria-hidden="true">
   <div class="modal-dialog">
@@ -425,10 +456,82 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
 </div>
 
 
+
+
+<!-- Modal -->
+<div class="modal fade" id="enviarReciboModal" tabindex="-1" aria-labelledby="enviarReciboModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="formEnviarWhatsapp" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="enviarReciboModalLabel">Enviar Recibo via WhatsApp</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="recibo_id" class="form-label">Número do Recibo/Venda</label>
+          <input type="text" class="form-control" id="recibo_id" name="recibo_id" required>
+        </div>
+        <div class="mb-3">
+          <label for="numero_whatsapp" class="form-label">Número WhatsApp para Enviar</label>
+          <input type="text" class="form-control" id="numero_whatsapp" name="numero_whatsapp" placeholder="Ex: 25884xxxxxxx" required>
+          <div class="form-text">Informe o número no formato internacional, sem espaços ou símbolos.</div>
+        </div>
+        <div id="respostaWhatsapp"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-success">Enviar</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('formEnviarWhatsapp').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const recibo_id = this.recibo_id.value.trim();
+  const numero_whatsapp = this.numero_whatsapp.value.trim();
+  const respostaDiv = document.getElementById('respostaWhatsapp');
+  respostaDiv.innerHTML = '';
+
+  if (!recibo_id || !numero_whatsapp) {
+    respostaDiv.innerHTML = '<div class="alert alert-warning">Por favor, preencha ambos os campos.</div>';
+    return;
+  }
+
+  fetch('enviar_recibo_whatsapp.php', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+  body: new URLSearchParams({
+    recibo_id: recibo_id,
+    numero_whatsapp: numero_whatsapp
+  })
+})
+.then(response => response.json())
+.then(data => {
+  if (data.success) {
+    respostaDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+  } else {
+    respostaDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+  }
+})
+.catch(async (error) => {
+  const text = await error.text();
+  console.error('Erro no fetch:', text);
+  respostaDiv.innerHTML = '<div class="alert alert-danger">Erro ao enviar a mensagem.</div>';
+});
+
+});
+</script>
+
+
+
+
 <!-- Scripts -->
 <script src="../bootstrap/bootstrap-5.3.3/jquery/jquery.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {

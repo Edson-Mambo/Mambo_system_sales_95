@@ -17,6 +17,7 @@ try {
     <meta charset="UTF-8">
     <title>Listar Produtos Take Away</title>
     <link rel="stylesheet" href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+    <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </head>
 <body class="p-4 bg-light">
 <div class="container">

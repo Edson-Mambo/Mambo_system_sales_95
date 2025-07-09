@@ -2,6 +2,11 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 
+require_once __DIR__ . '/configuracoes/logMiddleware.php';
+
+
+
+
 //require_once 'log.php';
 
 
@@ -79,6 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <title>Login - MamboSystem95</title>
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
+
 </head>
 <body class="bg-light">
     <div class="container mt-5">
