@@ -31,24 +31,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nome = $_POST['nome'];
     $codigo_barra = $_POST['codigo_barra'];
     $preco = str_replace(',', '.', $_POST['preco']);
-    $quantidade = $_POST['quantidade'];
+    $estoque = $_POST['estoque']; // usar campo estoque
 
-    if (empty($nome) || empty($codigo_barra) || !is_numeric($preco) || !is_numeric($quantidade)) {
+    if (empty($nome) || empty($codigo_barra) || !is_numeric($preco) || !is_numeric($estoque)) {
         $mensagem = '<div class="alert alert-danger">Preencha todos os campos corretamente.</div>';
     } else {
-        $sql = "UPDATE produtos SET nome = ?, codigo_barra = ?, preco = ?, quantidade = ? WHERE id = ?";
+        $sql = "UPDATE produtos SET nome = ?, codigo_barra = ?, preco = ?, estoque = ? WHERE id = ?";
         $stmt = $pdo->prepare($sql);
-        $sucesso = $stmt->execute([$nome, $codigo_barra, $preco, $quantidade, $id]);
+        $sucesso = $stmt->execute([$nome, $codigo_barra, $preco, $estoque, $id]);
 
         if ($sucesso) {
             $mensagem = '<div class="alert alert-success">Produto atualizado com sucesso.</div>';
-            // Atualiza os dados para mostrar no formulário
-            $produto = ['nome' => $nome, 'codigo_barra' => $codigo_barra, 'preco' => $preco, 'quantidade' => $quantidade];
+            $produto = ['nome' => $nome, 'codigo_barra' => $codigo_barra, 'preco' => $preco, 'estoque' => $estoque];
         } else {
             $mensagem = '<div class="alert alert-danger">Erro ao atualizar o produto.</div>';
         }
     }
 }
+
 ?>
 
 <!DOCTYPE html>

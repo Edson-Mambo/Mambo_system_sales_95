@@ -4,6 +4,11 @@ require_once '../config/database.php';
 
 $pdo = Database::conectar();
 
+// Simula o número do recibo
+if (!isset($_SESSION['nr_venda'])) {
+  $_SESSION['nr_venda'] = rand(1000, 9999);
+}
+
 // Consulta produtos do takeaway
 $stmt = $pdo->query("SELECT id, nome, preco, imagem FROM produtos_takeaway");
 $produtos = $stmt->fetchAll();
@@ -51,6 +56,9 @@ $produtos = $stmt->fetchAll();
     <a class="navbar-brand fw-bold" href="#">Menu Teka Away</a>
     <div class="ms-auto text-white">
       <?php echo isset($_SESSION['usuario_nome']) ? "Olá, " . htmlspecialchars($_SESSION['usuario_nome']) : "Usuário não logado"; ?>
+      <span class="badge bg-warning text-dark ms-3">
+        Nº Recibo: <?php echo isset($_SESSION['nr_venda']) ? $_SESSION['nr_venda'] : '---'; ?>
+      </span>
       <a href="logout.php" class="btn btn-outline-light btn-sm ms-3">Terminar Sessão</a>
     </div>
   </div>
@@ -125,11 +133,37 @@ $produtos = $stmt->fetchAll();
   </div>
 </div>
 
+<!-- Modal Remover Produto -->
+<div class="modal fade" id="modalRemoverProduto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Selecionar Produto para Remover</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul id="listaRemover" class="list-group"></ul>
+        <div id="campoQtdRemover" class="mt-3" style="display:none;">
+          <label>Quantidade a Remover:</label>
+          <input type="number" id="qtdRemover" class="form-control" min="1" value="1">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" id="confirmarRemover" class="btn btn-danger" disabled>Remover Selecionado</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 <script>
 $(function() {
   let carrinho = [];
+  let indexParaRemover = null;
+  let qtdParaRemover = 1;
+  let modalRemover = new bootstrap.Modal(document.getElementById('modalRemoverProduto'));
 
   function showToast(msg) {
     const toastId = Date.now();
@@ -179,12 +213,9 @@ $(function() {
     showToast(`${nome} adicionado ao carrinho`);
   });
 
-  $(document).on('click', '.remover-btn', function() {
-    carrinho.splice($(this).data('index'), 1);
-    renderCarrinho();
-  });
+  $('#finalizarVenda').click(() => abrirModalPagamento());
 
-  $('#finalizarVenda').click(() => {
+  function abrirModalPagamento() {
     if (!carrinho.length) {
       alert("Carrinho vazio!");
       return;
@@ -195,6 +226,10 @@ $(function() {
     $('#troco').text('0.00');
     $('#msgErroPagamento').hide();
     new bootstrap.Modal(document.getElementById('modalPagamento')).show();
+  }
+
+  $('#modalPagamento').on('shown.bs.modal', function () {
+    $('#valorPago').trigger('focus');
   });
 
   $('#valorPago').on('input', function() {
@@ -237,6 +272,99 @@ $(function() {
       }
     });
   });
+
+  function abrirModalRemover() {
+    const lista = $('#listaRemover');
+    lista.empty();
+    if (!carrinho.length) {
+      lista.append('<li class="list-group-item">Carrinho vazio.</li>');
+      $('#confirmarRemover').prop('disabled', true);
+      return;
+    }
+    carrinho.forEach((item, index) => {
+      lista.append(`
+        <li class="list-group-item remover-opcao" data-index="${index}" style="cursor:pointer;">
+          ${item.nome} x${item.qtd} - ${(item.preco * item.qtd).toFixed(2)} MZN
+        </li>
+      `);
+    });
+    $('#confirmarRemover').prop('disabled', false);
+    $('#campoQtdRemover').hide();
+    indexParaRemover = 0;
+    $('.remover-opcao').removeClass('active').eq(indexParaRemover).addClass('active');
+    atualizarQtdInput();
+    modalRemover.show();
+  }
+
+  function atualizarQtdInput() {
+    if (indexParaRemover !== null && carrinho[indexParaRemover].qtd > 1) {
+      $('#campoQtdRemover').show();
+      $('#qtdRemover').val(1).attr('max', carrinho[indexParaRemover].qtd);
+    } else {
+      $('#campoQtdRemover').hide();
+    }
+  }
+
+  $(document).on('click', '.remover-opcao', function() {
+    $('.remover-opcao').removeClass('active');
+    $(this).addClass('active');
+    indexParaRemover = $(this).data('index');
+    atualizarQtdInput();
+  });
+
+  $('#qtdRemover').on('input', function() {
+    qtdParaRemover = parseInt($(this).val());
+  });
+
+  $('#confirmarRemover').click(removerSelecionado);
+
+  function removerSelecionado() {
+    if (indexParaRemover !== null) {
+      let item = carrinho[indexParaRemover];
+      let qtdRemover = $('#qtdRemover').val() ? parseInt($('#qtdRemover').val()) : 1;
+      if (item.qtd <= 1 || qtdRemover >= item.qtd) {
+        carrinho.splice(indexParaRemover, 1);
+      } else {
+        item.qtd -= qtdRemover;
+      }
+      renderCarrinho();
+      modalRemover.hide();
+    }
+  }
+
+  $(document).keydown(function(e) {
+    if (e.key === "F9") {
+      e.preventDefault();
+      abrirModalPagamento();
+    }
+    if (e.key === "F5") {
+      e.preventDefault();
+      abrirModalRemover();
+    }
+
+    if ($('#modalRemoverProduto').hasClass('show')) {
+      if (e.key === "ArrowDown") {
+        moverSelecao(1);
+      }
+      if (e.key === "ArrowUp") {
+        moverSelecao(-1);
+      }
+      if (e.key === "Enter") {
+        removerSelecionado();
+      }
+    }
+  });
+
+  function moverSelecao(direcao) {
+    const opcoes = $('.remover-opcao');
+    if (!opcoes.length) return;
+    let atual = opcoes.index($('.remover-opcao.active'));
+    atual = (atual + direcao + opcoes.length) % opcoes.length;
+    $('.remover-opcao').removeClass('active');
+    $(opcoes[atual]).addClass('active');
+    indexParaRemover = $(opcoes[atual]).data('index');
+    atualizarQtdInput();
+  }
 
   renderCarrinho();
 });

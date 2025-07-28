@@ -1,41 +1,62 @@
 <?php
-$agrupado = $agrupado ?? [];
 require_once '../config/database.php';
 $pdo = Database::conectar();
 include 'helpers/voltar_menu.php';
 
-// Consulta com método de pagamento incluído
-$sql = "
-SELECT 
-    v.id AS venda_id,
-    v.data_venda,
-    v.total,
-    v.valor_pago,
-    v.troco,
-    v.metodo_pagamento,
-    p.nome AS nome_produto,
-    pv.quantidade,
-    pv.preco_unitario,
-    (pv.quantidade * pv.preco_unitario) AS subtotal
-FROM vendas v
-JOIN produtos_vendidos pv ON v.id = pv.venda_id
-LEFT JOIN produtos p ON pv.produto_id = p.id
-ORDER BY v.data_venda DESC, v.id DESC, pv.id ASC
-";
+// Processa filtro de datas
+$data_inicial = isset($_GET['data_inicial']) ? $_GET['data_inicial'] : null;
+$data_final = isset($_GET['data_final']) ? $_GET['data_final'] : null;
 
-$stmt = $pdo->query($sql);
-$resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Busca categorias
+$sqlCategorias = "SELECT id, nome FROM categorias ORDER BY nome ASC";
+$stmtCat = $pdo->query($sqlCategorias);
+$categorias = $stmtCat->fetchAll(PDO::FETCH_ASSOC);
 
-// Agrupar por ID da venda
-$agrupado = [];
-foreach ($resultados as $linha) {
-    $vendaId = $linha['venda_id'];
-    $agrupado[$vendaId]['data'] = $linha['data_venda'];
-    $agrupado[$vendaId]['total'] = $linha['total'];
-    $agrupado[$vendaId]['valor_pago'] = $linha['valor_pago'];
-    $agrupado[$vendaId]['troco'] = $linha['troco'];
-    $agrupado[$vendaId]['metodo_pagamento'] = $linha['metodo_pagamento'];
-    $agrupado[$vendaId]['itens'][] = $linha;
+$relatorio = [];
+
+// Para cada categoria, buscar vendas filtradas
+foreach ($categorias as $categoria) {
+    $sql = "
+    SELECT 
+        DATE(v.data_venda) AS data,
+        p.nome AS nome_produto,
+        SUM(pv.quantidade) AS total_quantidade,
+        SUM(pv.quantidade * pv.preco_unitario) AS total_valor
+    FROM produtos_vendidos pv
+    JOIN produtos p ON pv.produto_id = p.id
+    JOIN vendas v ON pv.venda_id = v.id
+    WHERE p.categoria_id = ?
+    ";
+
+    $params = [$categoria['id']];
+
+    if ($data_inicial) {
+        $sql .= " AND DATE(v.data_venda) >= ? ";
+        $params[] = $data_inicial;
+    }
+    if ($data_final) {
+        $sql .= " AND DATE(v.data_venda) <= ? ";
+        $params[] = $data_final;
+    }
+
+    $sql .= " GROUP BY data, p.id ORDER BY data DESC, total_valor DESC ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Agrupa por data
+    $agrupado = [];
+    foreach ($dados as $linha) {
+        $data = $linha['data'];
+        $agrupado[$data][] = $linha;
+    }
+
+    $relatorio[] = [
+        'id' => $categoria['id'],
+        'categoria' => $categoria['nome'],
+        'dados' => $agrupado
+    ];
 }
 ?>
 
@@ -43,119 +64,153 @@ foreach ($resultados as $linha) {
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Relatório de Vendas</title>
-  <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <title>Dashboard com Sidebar e Filtro de Data</title>
+  <link rel="stylesheet" href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
   <style>
-    @media print {
-      .no-print {
-        display: none;
-      }
+    body { overflow-x: hidden; }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 220px;
+      background: #343a40;
+      padding-top: 60px;
+    }
+    .sidebar a {
+      color: #fff;
+      display: block;
+      padding: 10px 20px;
+      text-decoration: none;
+    }
+    .sidebar a:hover {
+      background: #495057;
+    }
+    .content {
+      margin-left: 240px;
+      padding: 20px;
+    }
+    .filtro-data {
+      margin-bottom: 20px;
     }
   </style>
 </head>
-
 <body class="bg-light">
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Relatório de Vendas</h2>
-    <div>
-      <a href="<?= $pagina_destino ?>" class="btn btn-secondary mb-3">← Voltar ao Menu</a>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <h5 class="text-center text-white">📁 Categorias</h5>
+  <?php foreach ($relatorio as $cat): ?>
+    <a href="#cat-<?= $cat['id'] ?>"><?= htmlspecialchars($cat['categoria']) ?></a>
+  <?php endforeach; ?>
+</div>
+
+<!-- Conteúdo -->
+<div class="content">
+  <h2 class="mb-4">📊 Dashboard de Vendas</h2>
+
+  <!-- Filtro por Data -->
+  <form method="GET" class="row g-3 filtro-data">
+    <div class="col-md-3">
+      <label for="data_inicial" class="form-label">Data Inicial</label>
+      <input type="date" name="data_inicial" id="data_inicial" value="<?= htmlspecialchars($data_inicial) ?>" class="form-control">
     </div>
-  </div>
+    <div class="col-md-3">
+      <label for="data_final" class="form-label">Data Final</label>
+      <input type="date" name="data_final" id="data_final" value="<?= htmlspecialchars($data_final) ?>" class="form-control">
+    </div>
+    <div class="col-md-3 align-self-end">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      <a href="?" class="btn btn-secondary">Limpar</a>
+    </div>
+  </form>
 
-  <?php $datas_exibidas = []; ?>
+  <?php foreach ($relatorio as $cat): ?>
+    <div id="cat-<?= $cat['id'] ?>" class="mb-5">
+      <h4 class="bg-primary text-white p-2 rounded"><?= htmlspecialchars($cat['categoria']) ?></h4>
 
-  <?php foreach ($agrupado as $vendaId => $dadosVenda): ?>
-    <?php
-      $dataVenda = date('d/m/Y', strtotime($dadosVenda['data']));
-      $itens = $dadosVenda['itens'];
-
-      if (!isset($datas_exibidas[$dataVenda])) {
-        $totalDoDia = 0;
-        foreach ($agrupado as $venda) {
-          if (date('d/m/Y', strtotime($venda['data'])) === $dataVenda) {
-            $totalDoDia += $venda['total'];
-          }
-        }
-
-        // Bloco do total do dia COM botão de imprimir
-        echo '<div class="d-flex justify-content-between align-items-center alert alert-info">';
-        echo '<strong>Total vendido em ' . $dataVenda . ': ' . number_format($totalDoDia, 2, ',', '.') . ' MZN</strong>';
-        echo '<button class="btn btn-primary btn-sm no-print" onclick="imprimirDia(\'' . $dataVenda . '\')">Imprimir Relatório do Dia</button>';
-        echo '</div>';
-
-        $datas_exibidas[$dataVenda] = true;
-      }
-    ?>
-
-    <div class="card shadow-sm mb-4 bloco-dia" data-dia="<?= $dataVenda ?>">
-      <div class="card-header bg-dark text-white">
-        <strong>Data da Venda: <?= $dataVenda ?></strong>
-      </div>
-      <div class="card-body">
-        <h5>Venda Nº <?= $vendaId ?>
-          <small class="text-muted">(<?= date('H:i:s', strtotime($dadosVenda['data'])) ?>)</small>
-        </h5>
-        <p><strong>Método de Pagamento:</strong> <?= ucfirst($dadosVenda['metodo_pagamento']) ?></p>
-
-        <table class="table table-bordered mb-4">
-          <thead class="table-light">
-            <tr>
-              <th>Produto</th>
-              <th>Quantidade</th>
-              <th>Preço Unitário</th>
-              <th>Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($itens as $item): ?>
-              <tr>
-                <td><?= htmlspecialchars($item['nome_produto']) ?></td>
-                <td><?= $item['quantidade'] ?></td>
-                <td><?= number_format($item['preco_unitario'], 2, ',', '.') ?> MZN</td>
-                <td><?= number_format($item['subtotal'], 2, ',', '.') ?> MZN</td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-          <tfoot>
-            <tr class="table-secondary">
-              <td colspan="3" class="text-end"><strong>Total da Venda:</strong></td>
-              <td><strong><?= number_format($dadosVenda['total'], 2, ',', '.') ?> MZN</strong></td>
-            </tr>
-            <tr class="table-secondary">
-              <td colspan="3" class="text-end">Valor Pago:</td>
-              <td><?= number_format($dadosVenda['valor_pago'], 2, ',', '.') ?> MZN</td>
-            </tr>
-            <tr class="table-secondary">
-              <td colspan="3" class="text-end">Troco:</td>
-              <td><?= number_format($dadosVenda['troco'], 2, ',', '.') ?> MZN</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <?php if (!empty($cat['dados'])): ?>
+        <?php foreach ($cat['dados'] as $data => $produtos): ?>
+          <div class="card mb-3 shadow-sm">
+            <div class="card-header bg-dark text-white">
+              <h6 class="mb-0">Data: <?= date('d/m/Y', strtotime($data)) ?></h6>
+            </div>
+            <div class="card-body">
+              <table class="table table-bordered table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                    <th>Valor Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php 
+                    $total_dia = 0;
+                    foreach ($produtos as $p):
+                      $total_dia += $p['total_valor'];
+                  ?>
+                    <tr>
+                      <td><?= htmlspecialchars($p['nome_produto']) ?></td>
+                      <td><?= $p['total_quantidade'] ?></td>
+                      <td><?= number_format($p['total_valor'], 2, ',', '.') ?> MZN</td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                  <tr class="table-secondary">
+                    <td colspan="2" class="text-end"><strong>Total do Dia:</strong></td>
+                    <td><strong><?= number_format($total_dia, 2, ',', '.') ?> MZN</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <div class="alert alert-warning">Sem vendas para este período.</div>
+      <?php endif; ?>
     </div>
   <?php endforeach; ?>
 
-  <script>
-    function imprimirDia(data) {
-      // Oculta tudo que NÃO é do dia selecionado
-      document.querySelectorAll('.bloco-dia').forEach(function(bloco) {
-        bloco.style.display = bloco.getAttribute('data-dia') === data ? 'block' : 'none';
-      });
 
-      // Oculta todos os outros botões de imprimir
-      document.querySelectorAll('.no-print').forEach(function(btn) {
-        btn.style.display = 'none';
-      });
+  <!-- Botão Voltar ao Topo -->
+<button id="btnTopo" class="btn btn-primary" style="
+  position: fixed;
+  bottom: 40px;
+  right: 30px;
+  display: none;
+  z-index: 999;
+">
+  ↑ Topo
+</button>
 
-      window.print();
-
-      // Recarrega depois de imprimir para restaurar tudo
-      location.reload();
+<script>
+  // Mostrar ou esconder botão
+  window.onscroll = function() {
+    const btn = document.getElementById("btnTopo");
+    if (document.body.scrollTop > 200 || document.documentElement.scrollTop > 200) {
+      btn.style.display = "block";
+    } else {
+      btn.style.display = "none";
     }
-  </script>
+  };
 
-  <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+  // Ao clicar, rolar suavemente pro topo
+  document.getElementById("btnTopo").onclick = function() {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+</script>
+
+
+
+  <div class="text-center">
+    <a href="voltar.php" class="btn btn-secondary">← Voltar</a>
+  </div>
 </div>
+
 </body>
 </html>

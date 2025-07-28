@@ -1,51 +1,59 @@
 <?php
 session_start();
-
 require_once '../config/database.php';
-$pdo = Database::conectar();
-include 'helpers/voltar_menu.php'; 
 
+$pdo = Database::conectar();
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// Verifica login
+if (!isset($_SESSION['usuario_id'])) {
+    die('Acesso negado. Faça login primeiro.');
+}
 
 $mensagem = '';
 $produto_encontrado = false;
 $prod = null;
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    if (isset($_POST['buscar'])) {
-        $busca = trim($_POST['busca']);
-        $busca_param = "%$busca%";
-
-        $stmt = $pdo->prepare("SELECT * FROM produtos WHERE codigo_barra = ? OR nome LIKE ? LIMIT 1");
-        $stmt->execute([$busca, $busca_param]);
-        $prod = $stmt->fetch();
-
-        if ($prod) {
-            $produto_encontrado = true;
-        } else {
-            $mensagem = "Produto não encontrado!";
+// Se enviou o formulário de BUSCA
+if (isset($_POST['buscar'])) {
+    $busca = trim($_POST['busca'] ?? '');
+    if ($busca !== '') {
+        $stmt = $pdo->prepare("SELECT * FROM produtos WHERE nome LIKE ? OR codigo_barra = ? LIMIT 1");
+        $stmt->execute(["%$busca%", $busca]);
+        $prod = $stmt->fetch(PDO::FETCH_ASSOC);
+        $produto_encontrado = $prod ? true : false;
+        if (!$produto_encontrado) {
+            $mensagem = '<div class="alert alert-warning">Produto não encontrado.</div>';
         }
     }
+}
 
-    if (isset($_POST['ajustar'])) {
-        $id_produto = $_POST['id_produto'];
-        $quantidade = (int)$_POST['quantidade'];
-        $novo_preco = (float)$_POST['preco'];
-        $motivo = trim($_POST['motivo']);
-        $ajustado_por = $_SESSION['usuario_id'] ?? 1; // ajuste para pegar da sessão
+// Se enviou o formulário de AJUSTE
+if (isset($_POST['ajustar'])) {
+    $id_produto = intval($_POST['id_produto'] ?? 0);
+    $quantidade = intval($_POST['quantidade'] ?? 0);
+    $preco = floatval($_POST['preco'] ?? 0);
+    $motivo = trim($_POST['motivo'] ?? '');
+    $usuario_id = $_SESSION['usuario_id'];
 
+    if ($id_produto <= 0 || $motivo === '') {
+        $mensagem = '<div class="alert alert-danger">Preencha todos os campos obrigatórios.</div>';
+    } else {
+        // Registra ajuste na tabela de log
         $stmt = $pdo->prepare("INSERT INTO ajustes_estoque (produto_id, quantidade_ajustada, motivo, ajustado_por) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$id_produto, $quantidade, $motivo, $ajustado_por]);
+        $stmt->execute([$id_produto, $quantidade, $motivo, $usuario_id]);
 
-        $pdo->prepare("UPDATE produtos SET quantidade_estoque = quantidade_estoque + ?, preco = ? WHERE id = ?")
-            ->execute([$quantidade, $novo_preco, $id_produto]);
+        // Atualiza estoque somando
+        $stmt = $pdo->prepare("UPDATE produtos SET estoque = estoque + ?, preco = ? WHERE id = ?");
+        $stmt->execute([$quantidade, $preco, $id_produto]);
 
-        $mensagem = "Estoque e preço ajustados com sucesso!";
+        $mensagem = '<div class="alert alert-success">Estoque ajustado com sucesso!</div>';
 
-        // Atualiza o produto para mostrar valores atualizados
+        // Para exibir os dados atualizados:
         $stmt = $pdo->prepare("SELECT * FROM produtos WHERE id = ?");
         $stmt->execute([$id_produto]);
-        $prod = $stmt->fetch();
-        $produto_encontrado = true;
+        $prod = $stmt->fetch(PDO::FETCH_ASSOC);
+        $produto_encontrado = $prod ? true : false;
     }
 }
 ?>
@@ -61,11 +69,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <div class="container mt-5">
     <div class="card p-4 shadow">
         <h2 class="mb-4">Ajustar Estoque e Preço</h2>
-        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+        <a href="voltar.php" class="btn btn-secondary mb-3">← Voltar ao Painel</a>
 
-        <?php if (!empty($mensagem)): ?>
-            <div class="alert alert-info"><?= htmlspecialchars($mensagem) ?></div>
-        <?php endif; ?>
+        <?= $mensagem ?>
 
         <!-- Formulário de busca -->
         <form method="POST" class="mb-4">
@@ -90,13 +96,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <input type="text" class="form-control" value="<?= htmlspecialchars($prod['codigo_barra']) ?>" disabled>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Quantidade Atual</label>
-                    <input type="text" class="form-control" value="<?= htmlspecialchars($prod['quantidade_estoque']) ?>" disabled>
-                </div>
+               <div class="mb-3">
+    <label class="form-label">Estoque Atual</label>
+    <input type="text" class="form-control" value="<?= htmlspecialchars($prod['estoque']) ?>" disabled>
+</div>
+
 
                 <div class="mb-3">
-                    <label class="form-label">Nova Quantidade (positivo ou negativo)</label>
+                    <label class="form-label">Ajuste de Quantidade (positivo ou negativo)</label>
                     <input type="number" name="quantidade" class="form-control" required>
                 </div>
 
@@ -113,8 +120,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <button type="submit" name="ajustar" class="btn btn-success w-100">Salvar Ajustes</button>
             </form>
         <?php endif; ?>
-
-        
 
     </div>
 </div>

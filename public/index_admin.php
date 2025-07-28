@@ -58,6 +58,7 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
             <i class="fa-solid fa-list"></i> Listagem
           </a>
           <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="../src/View/listar_usuario.php">Listar Usuarios</a></li>
             <li><a class="dropdown-item" href="../src/View/listar_produtos.view.php">Produtos</a></li>
             <li><a class="dropdown-item" href="../src/View/inventario.view.php">Inventário</a></li>
             <li><a class="dropdown-item" href="listar_takeaway.php">Take Away</a></li>
@@ -77,9 +78,10 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
             <i class="fa-solid fa-chart-line"></i> Relatórios
           </a>
           <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório de Vendas</a></li>
-            <li><a class="dropdown-item" href="relatorio_bebidas.php">Relatório de Bebidas</a></li>
-            <li><a class="dropdown-item" href="relatorio_mercearia.php">Relatório de Mercearia</a></li>
+            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório Vendas Gerais</a></li>
+            <li><a class="dropdown-item" href="relatorio_bebidas.php">Relatório Bebidas</a></li>
+            <li><a class="dropdown-item" href="relatorio_food.php">Relatório Foods</a></li>
+            <li><a class="dropdown-item" href="relatorios_teka_away.php">Relatório Take Away</a></li>
             <li><a class="dropdown-item" href="relatorio_logins.php">Relatório de Logins</a></li>
             <li><a class="dropdown-item" href="relatorio_estoque.php">Relatório de Estoque</a></li>
           </ul>

@@ -11,7 +11,7 @@ $categoriaSelecionada = $_GET['categoria'] ?? 'Todos';
 // Consulta produtos por categoria
 if ($categoriaSelecionada !== 'Todos') {
     $stmt = $pdo->prepare("
-        SELECT p.id, p.nome, p.codigo_barra, p.quantidade, p.preco, c.nome AS categoria
+        SELECT p.id, p.nome, p.codigo_barra, p.estoque, p.preco, c.nome AS categoria
         FROM produtos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         WHERE c.nome = ?
@@ -20,7 +20,7 @@ if ($categoriaSelecionada !== 'Todos') {
     $stmt->execute([$categoriaSelecionada]);
 } else {
     $stmt = $pdo->query("
-        SELECT p.id, p.nome, p.codigo_barra, p.quantidade, p.preco, c.nome AS categoria
+        SELECT p.id, p.nome, p.codigo_barra, p.estoque, p.preco, c.nome AS categoria
         FROM produtos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         ORDER BY c.nome, p.nome
@@ -167,7 +167,7 @@ unset($_SESSION['mensagem']);
                     <td><?= htmlspecialchars($produto['categoria']) ?></td>
                     <td><?= htmlspecialchars($produto['nome']) ?></td>
                     <td><?= htmlspecialchars($produto['codigo_barra']) ?></td>
-                    <td><?= (int)$produto['quantidade'] ?></td>
+                    <td><?= (int)$produto['estoque'] ?></td>
                     <td>
                       <input type="number"
                              name="produtos[<?= $produto['id'] ?>][quantidade_fisica]"

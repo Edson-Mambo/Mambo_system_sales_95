@@ -381,13 +381,14 @@ foreach ($carrinho as $item) {
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
-        
-        <!-- ESTE É O ID DO VALE CORRETO -->
+
+        <!-- ID do Vale -->
         <input type="hidden" name="id_vale" id="id_vale_modal">
 
-        <!-- TOTAL ATUALIZADO -->
+        <!-- Total Atualizado -->
         <input type="hidden" name="total_atualizado" id="total_atualizado_modal">
 
+        <!-- Cliente ID -->
         <input type="hidden" name="cliente_id" id="cliente_id_finalizar">
 
         <p><strong>Total a Pagar: </strong> MT <span id="total_pagar_texto"><?= number_format($total, 2, ',', '.') ?></span></p>
@@ -410,7 +411,7 @@ foreach ($carrinho as $item) {
 
         <div class="mb-3">
           <label for="valor_pago" class="form-label">Valor Pago</label>
-          <input type="number" step="0.01" min="0" id="valor_pago" name="valor_pago_novo" class="form-control" required>
+          <input type="number" step="0.01" min="0" id="valor_pago" name="valor_pago" class="form-control" required>
         </div>
 
         <div class="mb-3">
@@ -428,6 +429,7 @@ foreach ($carrinho as $item) {
 </div>
 
 
+
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 <script>
@@ -436,7 +438,7 @@ $(function() {
   const total = <?= json_encode($total ?? 0) ?>;
   const carrinhoExiste = <?= !empty($carrinho) ? 'true' : 'false' ?>;
 
-  // --- UTIL: Atualiza cliente selecionado em todos os campos ---
+  /** Atualiza o ID do cliente nos campos ocultos ao selecionar ou cadastrar */
   function setClienteSelecionado(id, nome) {
     $('#clienteSelecionadoTexto').text(nome);
     $('#clienteSelecionadoId').val(id);
@@ -445,44 +447,23 @@ $(function() {
     $('#cliente_id_finalizar').val(id);
   }
 
- $('#formCadastrarCliente').submit(function(e) {
-  e.preventDefault();
-  const dados = $(this).serialize();
-  $.post('salvar_cliente_ajax.php', dados, function(res) {
-    if (res.success) {
-      alert('Cliente cadastrado!');
-      setClienteSelecionado(res.cliente.id, res.cliente.nome);
-      $('#modalCadastrarCliente').modal('hide');
-      $('#formCadastrarCliente')[0].reset();
-    } else {
-      alert('Erro: ' + res.mensagem);
-    }
-  }, 'json').fail(function(jqXHR, textStatus, errorThrown) {
-    console.error('Erro AJAX:', textStatus, errorThrown);
-    console.error('Resposta do servidor:', jqXHR.responseText);
-    alert('Erro na requisição: ' + textStatus);
+  /** Cadastrar Cliente via AJAX */
+  $('#formCadastrarCliente').submit(function(e) {
+    e.preventDefault();
+    const dados = $(this).serialize();
+    $.post('salvar_cliente_ajax.php', dados, function(res) {
+      if (res.success) {
+        alert('Cliente cadastrado!');
+        setClienteSelecionado(res.cliente.id, res.cliente.nome);
+        $('#modalCadastrarCliente').modal('hide');
+        $('#formCadastrarCliente')[0].reset();
+      } else {
+        alert('Erro: ' + res.mensagem);
+      }
+    }, 'json').fail(() => alert('Erro na requisição.'));
   });
-});
 
-$('#formSalvarVale').submit(function(e) {
-  e.preventDefault(); // não deixa recarregar
-
-  const dados = $(this).serialize();
-
-  $.post('salvar_vale.php', dados, function(res) {
-    if (res.success) {
-      alert(res.mensagem); // Vale salvo com sucesso!
-      location.reload();   // Recarrega a página para limpar tudo!
-    } else {
-      alert('Erro: ' + res.mensagem);
-    }
-  }, 'json').fail(function() {
-    alert('Erro na requisição.');
-  });
-});
-
-
-  // --- BUSCAR CLIENTE ---
+  /** Buscar Cliente */
   $('#formBuscarCliente').submit(function(e) {
     e.preventDefault();
     const termo = $('#buscar_cliente_input').val().trim();
@@ -500,31 +481,80 @@ $('#formSalvarVale').submit(function(e) {
       clientes.forEach(cliente => {
         const nome = cliente.nome + (cliente.apelido ? ' ' + cliente.apelido : '');
         html += `<tr>
-                   <td>${nome}</td>
-                   <td>${cliente.telefone}</td>
-                   <td><button class="btn btn-success selecionar-cliente" data-id="${cliente.id}" data-nome="${nome}">Selecionar</button></td>
-                 </tr>`;
+          <td>${nome}</td>
+          <td>${cliente.telefone}</td>
+          <td><button class="btn btn-success selecionar-cliente" data-id="${cliente.id}" data-nome="${nome}">Selecionar</button></td>
+        </tr>`;
       });
       html += '</table>';
       $('#resultado_busca_cliente').html(html);
     }).fail(() => $('#resultado_busca_cliente').html('<p>Erro ao buscar clientes.</p>'));
   });
 
-  // --- SELECIONAR CLIENTE ---
+  /** Selecionar Cliente */
   $('#resultado_busca_cliente').on('click', '.selecionar-cliente', function() {
     const id = $(this).data('id');
     const nome = $(this).data('nome');
-    $.post('buscar_cliente_ajax.php', { cliente_id: id }, function(response) {
-      if (response.success) {
-        setClienteSelecionado(id, nome);
-        $('#modalBuscarCliente').modal('hide');
-      } else {
-        alert('Erro: ' + response.message);
-      }
-    }, 'json').fail(() => alert('Erro na comunicação.'));
+    setClienteSelecionado(id, nome);
+    $('#modalBuscarCliente').modal('hide');
   });
 
-  // --- BUSCAR VALE PENDENTE ---
+  /** Botão de Finalizar Vale seta o ID */
+  $('.btn-warning[data-bs-target="#modalFinalizarVale"]').on('click', function() {
+    const idVale = $(this).data('id-vale');
+    $('#id_vale_modal').val(idVale);
+    $('#total_atualizado_modal').val(total);
+  });
+
+  /** Mostrar/ocultar campo número de transação */
+  $('#metodo_pagamento').on('change', function() {
+    const metodo = $(this).val();
+    if (['mpesa', 'emola', 'cartao'].includes(metodo)) {
+      $('#campo_numero').removeClass('d-none');
+      $('#numero_pagamento').attr('required', true);
+    } else {
+      $('#campo_numero').addClass('d-none');
+      $('#numero_pagamento').removeAttr('required').val('');
+    }
+  });
+
+  /** Calcular troco em tempo real */
+  $('#valor_pago').on('input', function() {
+    const pago = parseFloat($(this).val().replace(',', '.')) || 0;
+    const totalAtual = parseFloat($('#total_atualizado_modal').val().replace(',', '.')) || 0;
+    const troco = pago - totalAtual > 0 ? pago - totalAtual : 0;
+    $('#troco').val(troco.toFixed(2).replace('.', ','));
+  });
+
+  /** Submeter Vale Finalizar via AJAX */
+  $('#formFinalizarVale').submit(function(e) {
+    e.preventDefault();
+    const dados = $(this).serialize();
+    $.post('finalizar_vale.php', dados, function(res) {
+      if (res.success) {
+        alert('Vale finalizado com sucesso!');
+        location.href = 'vales.php';
+      } else {
+        alert(res.mensagem || 'Erro ao finalizar.');
+      }
+    }, 'json').fail(() => alert('Erro na requisição.'));
+  });
+
+  /** Salvar Vale */
+  $('#formSalvarVale').submit(function(e) {
+    e.preventDefault();
+    const dados = $(this).serialize();
+    $.post('salvar_vale.php', dados, function(res) {
+      if (res.success) {
+        alert(res.mensagem);
+        location.reload();
+      } else {
+        alert('Erro: ' + res.mensagem);
+      }
+    }, 'json').fail(() => alert('Erro na requisição.'));
+  });
+
+  /** Buscar Vale Pendente (Opcional) */
   $('#formBuscarValePendente').submit(function(e) {
     e.preventDefault();
     const termo = $('#buscar_vale_input').val().trim();
@@ -533,109 +563,25 @@ $('#formSalvarVale').submit(function(e) {
       return;
     }
     $('#resultado_busca_vale').html('Buscando...');
-    $.get('buscar_vale_pendente.php', { termo: termo }, function(html) {
+    $.get('buscar_vale_pendente.php', { termo }, function(html) {
       $('#resultado_busca_vale').html(html);
     }).fail(() => $('#resultado_busca_vale').html('<p>Erro ao buscar vales.</p>'));
   });
 
-  // --- SELECIONAR VALE PENDENTE E ABRIR MODAL ---
-  $('#resultado_busca_vale').on('click', '.selecionar-vale', function() {
-    const idVale = $(this).data('id');
-    const numeroVale = $(this).data('numero');
-    const totalVale = $(this).data('total');
-
-    $('#id_vale_modal').val(idVale);
-    $('#total_atualizado_modal').val(totalVale);
-    $('#valeSelecionadoTexto').text('Vale nº ' + numeroVale);
-
-    $('#modalFinalizarVale').modal('show');
-  });
-
-  $(document).on('click', '.selecionar-vale', function() {
-  const idVale = $(this).data('id');
-  const numeroVale = $(this).data('numero');
-  const valorTotal = $(this).data('valor');
-
-  $('#id_vale_modal').val(idVale);
-  $('#total_atualizado_modal').val(valorTotal);
-  $('#total_pagar_texto').text(`MT ${parseFloat(valorTotal).toFixed(2)}`);
-
-  $('#modalFinalizarVale').modal('show');
-});
-
-// --- Selecionar Vale na tabela ---
-$(document).on('click', '.selecionar-vale', function() {
-  const idVale = $(this).data('id');
-  const numeroVale = $(this).data('numero');
-  const valorTotal = $(this).data('valor');
-
-  console.log('Selecionado:', { idVale, numeroVale, valorTotal });
-
-  // Preencher campos ocultos no modal
-  $('#id_vale_modal').val(idVale);
-  $('#total_atualizado_modal').val(valorTotal);
-
-  // Atualizar texto do Total no modal
-  $('#total_pagar_texto').text(`MT ${parseFloat(valorTotal).toFixed(2).replace('.', ',')}`);
-
-  // Limpar campos de pagamento
-  $('#valor_pago').val('');
-  $('#troco').val('0,00');
-  $('#metodo_pagamento').val('');
-  $('#numero_pagamento').val('').parent().addClass('d-none');
-
-  // Mostrar modal
-  $('#modalFinalizarVale').modal('show');
-});
-
-// --- Mostrar campo número da transação, se necessário ---
-$('#metodo_pagamento').on('change', function() {
-  const metodo = $(this).val();
-  if (metodo === 'mpesa' || metodo === 'emola' || metodo === 'cartao') {
-    $('#campo_numero').removeClass('d-none');
-  } else {
-    $('#campo_numero').addClass('d-none');
-    $('#numero_pagamento').val('');
-  }
-});
-
-// --- Calcular troco (opcional) ---
-$('#valor_pago').on('input', function() {
-  const valorPago = parseFloat($(this).val()) || 0;
-  const total = parseFloat($('#total_atualizado_modal').val()) || 0;
-  let troco = valorPago - total;
-  troco = troco < 0 ? 0 : troco;
-  $('#troco').val(troco.toFixed(2).replace('.', ','));
-});
-
-
-  // --- SUBMETER FORM FINALIZAR ---
-  $('#formFinalizarVale').submit(function(e) {
-    e.preventDefault();
-    const dados = $(this).serialize();
-    $.post('finalizar_vales.php', dados, function(res) {
-      if (res.success) {
-        location.reload();
-      } else {
-        alert(res.message);
-      }
-    }, 'json').fail(() => alert('Erro ao finalizar.'));
-  });
-
-  // --- ADICIONAR PRODUTO ---
+  /** Adicionar Produto */
   $('#formAdicionarProduto').submit(function(e) {
     e.preventDefault();
-    const produtoBusca = $('#produto_busca').val().trim();
+    const produto = $('#produto_busca').val().trim();
     const quantidade = parseInt($('#quantidade').val(), 10);
-    if (produtoBusca === '' || quantidade < 1) return;
-    $.post('adicionar_produto_ajax.php', { produto_busca: produtoBusca, quantidade: quantidade }, function(res) {
-      if (res.success) location.reload();
-    }, 'json');
+    if (produto && quantidade > 0) {
+      $.post('adicionar_produto_ajax.php', { produto_busca: produto, quantidade }, function(res) {
+        if (res.success) location.reload();
+      }, 'json');
+    }
   });
 
-  $(document).ready(function() {
+  /** Autorização Remover Produto */
   let codigoParaRemover = null;
-
   $('.btn-remover').click(function() {
     codigoParaRemover = $(this).data('codigo');
     $('#codigoProduto').val(codigoParaRemover);
@@ -644,15 +590,13 @@ $('#valor_pago').on('input', function() {
     $('#modalAutorizacao').modal('show');
   });
 
-  $('#formAutorizacao').off('submit').on('submit', function(e) {
+  $('#formAutorizacao').submit(function(e) {
     e.preventDefault();
-
     const senha = $('#senha_autorizacao').val().trim();
     if (!senha) {
       $('#erro_autorizacao').removeClass('d-none').text('Informe a senha.');
       return;
     }
-
     $.post('autorizacao_remocao.php', {
       codigoProduto: codigoParaRemover,
       senha_autorizacao: senha
@@ -669,171 +613,19 @@ $('#valor_pago').on('input', function() {
       } else {
         $('#erro_autorizacao').removeClass('d-none').text('Senha incorreta.');
       }
-    }, 'json').fail(function() {
-      $('#erro_autorizacao').removeClass('d-none').text('Erro na requisição.');
-    });
-  });
-});
-
-
-$(document).on('click', '.selecionar-vale', function() {
-  const idVale = $(this).data('id');
-
-  // Busca dados detalhados do vale
-  $.getJSON('ajax/detalhes_vale.php', { id_vale: idVale }, function(res) {
-    if(res.success) {
-      $('#id_vale_modal').val(res.id_vale);
-      $('#total_atualizado_modal').val(res.valor_total);
-
-      $('#total_pagar_texto').text(`MT ${res.valor_total.toFixed(2).replace('.', ',')}`);
-      $('#saldo_texto').text(`Saldo: MT ${res.saldo.toFixed(2).replace('.', ',')}`);
-      $('#parcelas_texto').text(`Parcelas pagas: ${res.parcelas_pagas} de 3`);
-
-      $('#valor_pago').val('');
-      $('#troco').val('0,00');
-      $('#metodo_pagamento').val('');
-      $('#numero_pagamento').val('').parent().addClass('d-none');
-
-      if(res.parcelas_pagas >= 3) {
-        alert('Limite de 3 parcelas atingido. Pague o saldo total.');
-        $('#valor_pago').prop('max', res.saldo.toFixed(2));
-      } else {
-        $('#valor_pago').prop('max', res.saldo.toFixed(2));
-      }
-
-      $('#modalFinalizarVale').modal('show');
-    } else {
-      alert('Erro ao carregar dados do vale.');
-    }
-  });
-});
-
-  // --- MÉTODO DE PAGAMENTO ---
-  $('#metodo_pagamento').change(function() {
-    if (['mpesa', 'emola', 'cartao'].includes($(this).val())) {
-      $('#campo_numero').removeClass('d-none');
-      $('#numero_pagamento').attr('required', true);
-    } else {
-      $('#campo_numero').addClass('d-none').removeAttr('required').val('');
-    }
+    }, 'json').fail(() => $('#erro_autorizacao').removeClass('d-none').text('Erro na requisição.'));
   });
 
-  // --- CALCULAR TROCO ---
-  $('#valor_pago').on('input', function() {
-    const valorPago = parseFloat($(this).val()) || 0;
-    const troco = valorPago - total;
-    $('#troco').val(troco > 0 ? troco.toFixed(2) : '0,00');
+  /** Tecla F9 abre modal Finalizar */
+  $(document).on('keydown', function(e) {
+    if (e.key === 'F9' && carrinhoExiste) {
+      e.preventDefault();
+      $('.btn-warning[data-bs-target="#modalFinalizarVale"]').click();
+    }
   });
-
-  // --- TECLA F9 abre modal finalizar ---
- // Supondo que você já tem o ID do vale guardado em JS:
-let idValeAtual = 123; // ou pegue do carrinho, do DOM, etc.
-
-$(document).on('keydown', function(e) {
-  if (e.key === 'F9' && carrinhoExiste) {
-    e.preventDefault();
-
-    // SETA O ID DO VALE ANTES DE ABRIR O MODAL!
-    $('#id_vale_modal').val(idValeAtual);
-
-    $('#modalFinalizarVale').modal('show');
-  }
-});
-
-
-  function finalizarVale() {
-  const idVale = document.getElementById('id_vale_modal').value;
-  const valorPago = document.getElementById('valor_pago').value;
-  const metodoPagamento = document.getElementById('metodo_pagamento').value;
-  const numeroTransacao = document.getElementById('numero_pagamento').value;
-
-  console.log({ idVale, valorPago, metodoPagamento, numeroTransacao });
-
-  if (!idVale || !valorPago || !metodoPagamento) {
-    alert('Preencha todos os campos!');
-    return;
-  }
-
-  fetch('finalizar_vales.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      id_vale: idVale,
-      valor_pago_novo: valorPago,
-      metodo_pagamento: metodoPagamento,
-      numero_pagamento: numeroTransacao
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      alert(data.mensagem);
-      location.reload();
-    } else {
-      alert('Erro: ' + data.mensagem);
-    }
-  })
-  .catch(err => console.error(err));
-}
-
-
-
-//---Finalizar Vales---
- document.getElementById("formFinalizarVale")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const form = e.target;
-  const formData = new FormData(form);
-
-  try {
-    const response = await fetch(form.action, {
-      method: "POST",
-      body: formData
-    });
-
-    const text = await response.text(); // DEBUG
-    console.log("RESPOSTA PURA:", text); // Veja o que veio!
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (err) {
-      console.error("Erro ao fazer parse do JSON:", err);
-      alert("Resposta não é JSON:\n" + text);
-      return;
-    }
-
-    if (data.success) {
-      alert("Vale finalizado com sucesso!");
-      location.href = "vales.php";
-    } else {
-      alert(data.mensagem || "Erro ao finalizar.");
-    }
-  } catch (err) {
-    alert("Falha na requisição: " + err.message);
-  }
-});
-
-
-//-- Finalizar Vale F9--
-
-  const modalFinalizarVale = document.getElementById('modalFinalizarVale');
-  modalFinalizarVale.addEventListener('show.bs.modal', function (event) {
-    const button = event.relatedTarget;
-    const idVale = button.getAttribute('data-id-vale');
-    document.getElementById('id_vale_modal').value = idVale;
-
-    // Se quiser, também atualiza o total:
-    document.getElementById('total_atualizado_modal').value =
-      parseFloat(document.getElementById('total_pagar_texto').textContent.replace('.', '').replace(',', '.'));
-  });
-
-
 
 });
 </script>
-
-
-
 
 </body>
 </html>

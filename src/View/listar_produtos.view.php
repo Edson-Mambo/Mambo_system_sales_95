@@ -257,7 +257,7 @@ $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
                 <td><?= htmlspecialchars($produto['codigo_barra']) ?></td>
                 <td class="nome-produto"><?= htmlspecialchars($produto['nome']) ?></td>
                 <td><?= number_format($produto['preco'], 2, ',', '.') ?></td>
-                <td><?= $produto['quantidade'] ?></td>
+                <td><?= $produto['estoque'] ?></td>
                 <td>
                   <a href="../../public/editar_produto.php?id=<?= $produto['id'] ?>" class="btn btn-action btn-action-edit" title="Editar Produto">
                     <i class="bi bi-pencil"></i> Editar

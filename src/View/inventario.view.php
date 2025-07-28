@@ -4,18 +4,18 @@ $pdo = Database::conectar();
 
 // SQL para puxar produtos com quantidades vendidas até hoje
 $sql = "SELECT
-        p.id,
-        p.nome,
-        p.codigo_barra,
-        p.preco,
-        p.quantidade AS estoque_atual,
-        COALESCE(SUM(pv.quantidade), 0) AS quantidade_vendida,
-        (p.quantidade + COALESCE(SUM(pv.quantidade), 0)) AS total_inicial
-    FROM produtos p
-    LEFT JOIN produtos_vendidos pv ON pv.produto_id = p.id
-    LEFT JOIN vendas v ON v.id = pv.venda_id AND v.data_venda <= CURDATE()
-    GROUP BY p.id, p.nome, p.codigo_barra, p.preco, p.quantidade
-    ORDER BY p.nome ASC";
+    p.id,
+    p.nome,
+    p.codigo_barra,
+    p.preco,
+    p.estoque AS estoque_atual,
+    COALESCE(SUM(pv.quantidade), 0) AS quantidade_vendida,
+    (p.estoque + COALESCE(SUM(pv.quantidade), 0)) AS total_inicial
+FROM produtos p
+LEFT JOIN produtos_vendidos pv ON pv.produto_id = p.id
+LEFT JOIN vendas v ON v.id = pv.venda_id AND v.data_venda <= CURDATE()
+GROUP BY p.id, p.nome, p.codigo_barra, p.preco, p.estoque
+ORDER BY p.nome ASC";
 
 $stmt = $pdo->query($sql);
 $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);

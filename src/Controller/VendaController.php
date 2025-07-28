@@ -135,29 +135,36 @@ class VendaController
 
             $vendaId = $this->pdo->lastInsertId();
 
-            $stmtItem = $this->pdo->prepare("
-                INSERT INTO produtos_vendidos 
-                (venda_id, produto_id, quantidade, preco_unitario) 
-                VALUES 
-                (:venda_id, (SELECT id FROM produtos WHERE codigo_barra = :codigo_barra), :quantidade, :preco)
-            ");
-
             foreach ($carrinho as $codigo => $item) {
+                $stmtProduto = $this->pdo->prepare("SELECT id FROM produtos WHERE codigo_barra = :codigo_barra LIMIT 1");
+                $stmtProduto->execute([':codigo_barra' => $codigo]);
+                $produto = $stmtProduto->fetch(PDO::FETCH_ASSOC);
+
+                if (!$produto) {
+                    throw new PDOException("Produto não encontrado: $codigo");
+                }
+
+                $stmtItem = $this->pdo->prepare("
+                    INSERT INTO produtos_vendidos 
+                    (venda_id, produto_id, quantidade, preco_unitario) 
+                    VALUES 
+                    (:venda_id, :produto_id, :quantidade, :preco)
+                ");
                 $stmtItem->execute([
                     ':venda_id' => $vendaId,
-                    ':codigo_barra' => $codigo,
+                    ':produto_id' => $produto['id'],
                     ':quantidade' => $item['quantidade'],
                     ':preco' => $item['preco']
                 ]);
 
                 $stmtEstoque = $this->pdo->prepare("
                     UPDATE produtos 
-                    SET quantidade = quantidade - :quantidade 
-                    WHERE codigo_barra = :codigo
+                    SET estoque = estoque - :quantidade 
+                    WHERE id = :id
                 ");
                 $stmtEstoque->execute([
                     ':quantidade' => $item['quantidade'],
-                    ':codigo' => $codigo
+                    ':id' => $produto['id']
                 ]);
             }
 
@@ -165,18 +172,19 @@ class VendaController
 
             $_SESSION['numero_recibo'] = $vendaId;
             $_SESSION['carrinho'] = [];
-            unset($_SESSION['cliente_id']); // Limpa o cliente após venda
+            unset($_SESSION['cliente_id']);
 
             $pdfPath = $this->gerarPdfParaArquivo($vendaId);
 
             if (!$pdfPath) {
-                return ['success' => false, 'mensagem' => 'Erro ao gerar o recibo PDF. Verifique os logs.'];
+                return ['success' => false, 'mensagem' => 'Erro ao gerar PDF'];
             }
 
             return ['success' => true, 'venda_id' => $vendaId, 'pdfPath' => $pdfPath];
+
         } catch (PDOException $e) {
             $this->pdo->rollBack();
-            return ['success' => false, 'mensagem' => 'Erro ao salvar venda: ' . $e->getMessage()];
+            return ['success' => false, 'mensagem' => 'Erro: ' . $e->getMessage()];
         }
     }
 
@@ -212,9 +220,6 @@ class VendaController
                 return null;
             }
 
-            
-            
-
             ob_start();
             ?>
 
@@ -227,124 +232,121 @@ class VendaController
                 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
 
                 body {
-                font-family: 'Montserrat', sans-serif;
-                font-size: 13px;
-                margin: 30px;
-                color: #2c3e50;
-                background: #fff;
+                    font-family: 'Montserrat', sans-serif;
+                    font-size: 13px;
+                    margin: 30px;
+                    color: #2c3e50;
+                    background: #fff;
                 }
 
                 header {
-            display: flex;
-            justify-content: center;  /* Centraliza os blocos no container */
-            align-items: flex-start;
-            border-bottom: 2px solid #2980b9;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-            gap: 50px;  /* Espaço entre as divs */
-            }
+                    display: flex;
+                    justify-content: center;
+                    align-items: flex-start;
+                    border-bottom: 2px solid #2980b9;
+                    padding-bottom: 20px;
+                    margin-bottom: 30px;
+                    gap: 50px;
+                }
 
+                .empresa {
+                    margin-top: 5px;
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #2980b9;
+                }
 
+                h3 {
+                    margin-bottom: 5px;
+                    font-size: 15px;
+                    color: #2980b9;
+                    text-transform: uppercase;
+                }
 
-            .empresa {
-            margin-top: 5px;
-            font-size: 20px;
-            font-weight: 700;
-            color: #2980b9;
-            }
+                .dados-recibo {
+                    margin-top: 20px;
+                    text-align: center;
+                }
 
-            h3 {
-            margin-bottom: 5px;
-            font-size: 15px;
-            color: #2980b9;
-            text-transform: uppercase;
-            }
-
-            .dados-recibo {
-            margin-top: 20px;
-            text-align: center;
-            }
-
-            .dados-recibo p {
-            margin: 2px 0;
-            }
-
+                .dados-recibo p {
+                    margin: 2px 0;
+                }
 
                 section.produtos {
-                margin-bottom: 30px;
+                    margin-bottom: 30px;
                 }
 
                 table {
-                width: 100%;
-                border-collapse: collapse;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                border-radius: 6px;
-                overflow: hidden;
+                    width: 100%;
+                    border-collapse: collapse;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    border-radius: 6px;
+                    overflow: hidden;
                 }
 
                 thead {
-                background-color: #2980b9;
-                color: white;
+                    background-color: #2980b9;
+                    color: white;
                 }
 
                 thead th {
-                padding: 12px;
-                font-weight: 700;
-                text-transform: uppercase;
-                font-size: 13px;
-                text-align: left;
+                    padding: 12px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    font-size: 13px;
+                    text-align: left;
                 }
 
                 tbody tr {
-                border-bottom: 1px solid #ddd;
-                transition: background-color 0.3s ease;
+                    border-bottom: 1px solid #ddd;
+                    transition: background-color 0.3s ease;
                 }
 
                 tbody tr:hover {
-                background-color: #f1f8ff;
+                    background-color: #f1f8ff;
                 }
 
                 tbody td {
-                padding: 12px 15px;
-                font-size: 13px;
-                vertical-align: middle;
+                    padding: 12px 15px;
+                    font-size: 13px;
+                    vertical-align: middle;
                 }
 
                 tbody td.qty, tbody td.price, tbody td.subtotal {
-                text-align: right;
-                font-feature-settings: "tnum";
-                font-variant-numeric: tabular-nums;
+                    text-align: right;
+                    font-feature-settings: "tnum";
+                    font-variant-numeric: tabular-nums;
                 }
 
                 .totais {
-                max-width: 350px;
-                margin-left: auto;
-                margin-top: 20px;
-                border-top: 2px solid #2980b9;
-                padding-top: 15px;
-                font-size: 14px;
-                color: #2c3e50;
+                    max-width: 350px;
+                    margin-left: auto;
+                    margin-top: 20px;
+                    border-top: 2px solid #2980b9;
+                    padding-top: 15px;
+                    font-size: 14px;
+                    color: #2c3e50;
                 }
 
                 .totais div {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 8px;
-                font-weight: 600;
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                    font-weight: 600;
                 }
 
                 .totais div span.valor {
-                color: #2980b9;
+                    color: #2980b9;
                 }
 
                 footer {
-                margin-top: 40px;
-                border-top: 1px solid #ddd;
-                padding-top: 15px;
-                text-align: center;
-                font-style: italic;
-                font-size: 12px;
-                color: #7f8c8d;
+                    margin-top: 40px;
+                    border-top: 1px solid #ddd;
+                    padding-top: 15px;
+                    text-align: center;
+                    font-style: italic;
+                    font-size: 12px;
+                    color: #7f8c8d;
                 }
             </style>
             </head>
@@ -352,78 +354,66 @@ class VendaController
             <body>
 
             <header>
-            <!-- DIV esquerda: logo + empresa -->
-            <div class="dados-recibo">
-                   <!-- <img src="https://i.imgur.com/dq4wTyf.png" alt="Logo Mambo System">-->
-                <div class="empresa">Mambo System Sales</div>
-                
+                <div class="dados-recibo">
+                    <div class="empresa">Mambo System Sales</div>
                     <p><strong>Recibo Nº:</strong> <?= htmlspecialchars($vendaId) ?></p>
                     <p><strong>Data:</strong> <?= date('d/m/Y H:i:s', strtotime($venda['data_venda'])) ?></p>
                     <p><strong>Operador:</strong> <?= htmlspecialchars($venda['nome_usuario']) ?></p>
                     <p><strong>Tel:</strong> +258 84 854 1787</p>
                     <p><strong>E-mail:</strong> info@mambosystem95.com</p>
                     <p><strong>Local:</strong> Maputo, Moçambique</p>
-                
-                <br>
-                    <!-- DIV direita: dados do cliente -->
-
+                    <br>
                     <h3>Dados do Cliente</h3>
                     <p><strong>Nome:</strong> <?= htmlspecialchars($venda['cliente_nome'] ?? '-') ?></p>
                     <p><strong>Telefone:</strong> <?= htmlspecialchars($venda['cliente_telefone'] ?? '-') ?></p>
                     <p><strong>Email:</strong> <?= htmlspecialchars($venda['cliente_email'] ?? '-') ?></p>
                     <p><strong>Morada:</strong> <?= htmlspecialchars($venda['cliente_morada'] ?? '-') ?></p>
                 </div>
-            </div>
             </header>
 
             <section class="produtos">
-            <table>
-                <thead>
-                <tr>
-                    <th>Produto</th>
-                    <th class="qty">Qtd</th>
-                    <th class="price">Preço Unit.</th>
-                    <th class="subtotal">Subtotal</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($produtos as $item): ?>
-                <tr>
-                    <td><?= htmlspecialchars($item['nome']) ?></td>
-                    <td class="qty"><?= $item['quantidade'] ?></td>
-                    <td class="price">MT <?= number_format($item['preco_unitario'], 2, ',', '.') ?></td>
-                    <td class="subtotal">MT <?= number_format($item['preco_unitario'] * $item['quantidade'], 2, ',', '.') ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Produto</th>
+                            <th class="qty">Qtd</th>
+                            <th class="price">Preço Unit.</th>
+                            <th class="subtotal">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($produtos as $item): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($item['nome']) ?></td>
+                            <td class="qty"><?= $item['quantidade'] ?></td>
+                            <td class="price">MT <?= number_format($item['preco_unitario'], 2, ',', '.') ?></td>
+                            <td class="subtotal">MT <?= number_format($item['preco_unitario'] * $item['quantidade'], 2, ',', '.') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </section>
 
-            <<div class="totais">
-            <div><span>Total:</span> <span class="valor">MT <?= number_format($venda['total'], 2, ',', '.') ?></span></div>
-            <div><span>Pago:</span> <span class="valor">MT <?= number_format($venda['valor_pago'], 2, ',', '.') ?></span></div>
-            <div><span>Troco:</span> <span class="valor">MT <?= number_format($venda['valor_pago'] - $venda['total'], 2, ',', '.') ?></span></div>
-            <div><span>Método:</span> <span class="valor"><?= htmlspecialchars($venda['metodo_pagamento']) ?></span></div>
+            <div class="totais">
+                <div><span>Total:</span> <span class="valor">MT <?= number_format($venda['total'], 2, ',', '.') ?></span></div>
+                <div><span>Pago:</span> <span class="valor">MT <?= number_format($venda['valor_pago'], 2, ',', '.') ?></span></div>
+                <div><span>Troco:</span> <span class="valor">MT <?= number_format($venda['valor_pago'] - $venda['total'], 2, ',', '.') ?></span></div>
+                <div><span>Método:</span> <span class="valor"><?= htmlspecialchars($venda['metodo_pagamento']) ?></span></div>
 
-            <?php if (in_array(strtolower($venda['metodo_pagamento']), ['m-pesa', 'e-mola', 'cartao'])): ?>
-                <div><span>Número:</span> <span class="valor"><?= htmlspecialchars($venda['numero_pagamento'] ?? '-') ?></span></div>
-            <?php endif; ?>
+                <?php if (in_array(strtolower($venda['metodo_pagamento']), ['m-pesa', 'e-mola', 'cartao'])): ?>
+                    <div><span>Número:</span> <span class="valor"><?= htmlspecialchars($venda['numero_pagamento'] ?? '-') ?></span></div>
+                <?php endif; ?>
             </div>
 
-
             <footer>
-            <p>Obrigado pela sua preferência! Volte sempre :)</p>
-            
+                <p>Obrigado pela sua preferência! Volte sempre :)</p>
             </footer>
 
             </body>
             </html>
 
-
-
             <?php
             $html = ob_get_clean();
-            
 
             $options = new Options();
             $options->set('isRemoteEnabled', true);
@@ -455,9 +445,6 @@ class VendaController
         } catch (\Throwable $e) {
             error_log("Erro ao gerar PDF da venda $vendaId: " . $e->getMessage());
             return null;
-
-            
         }
     }
-    
 }

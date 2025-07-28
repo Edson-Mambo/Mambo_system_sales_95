@@ -72,7 +72,7 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
         🔍 Buscar Cliente
       </button>
 
-      <a href="vales.php" class="btn btn-sm btn-outline-secondary">
+      <a href="venda_vale.php" class="btn btn-sm btn-outline-secondary">
         🔁 Ir para Vale
       </a>
 

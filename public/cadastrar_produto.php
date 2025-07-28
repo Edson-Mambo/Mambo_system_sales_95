@@ -4,20 +4,20 @@ $pdo = Database::conectar();
 $cats = $pdo->query("SELECT * FROM categorias")->fetchAll();
 include 'helpers/voltar_menu.php'; 
 
-// Inserção ao submeter o formulário
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nome = $_POST['nome'];
-    $codigo_barra = $_POST['codigo_barra'];
-    $preco = $_POST['preco'];
-    $categoria = $_POST['categoria'];
-    $quantidade = $_POST['quantidade'];
+    $nome = $_POST['nome'] ?? '';
+    $codigo_barra = $_POST['codigo_barra'] ?? '';
+    $preco = $_POST['preco'] ?? '';
+    $categoria = $_POST['categoria'] ?? '';
+    $estoque = $_POST['estoque'] ?? 0; // Novo nome certo!
 
-    $stmt = $pdo->prepare("INSERT INTO produtos (nome, codigo_barra, preco, categoria_id, quantidade) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$nome, $codigo_barra, $preco, $categoria, $quantidade]);
+    $stmt = $pdo->prepare("INSERT INTO produtos (nome, codigo_barra, preco, categoria_id, estoque) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$nome, $codigo_barra, $preco, $categoria, $estoque]);
 
     echo "<div class='alert alert-success text-center'>Produto cadastrado com sucesso!</div>";
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="pt">
@@ -57,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="number" id="preco" name="preco" step="0.01" class="form-control" required />
         </div>
         <div class="mb-3">
-            <label for="quantidade" class="form-label">Quantidade</label>
-            <input type="number" id="quantidade" name="quantidade" class="form-control" required />
+            <label for="estoque" class="form-label">Quantidade</label>
+            <input type="number" id="estoque" name="estoque" class="form-control" required />
         </div>
         <div class="mb-3">
             <label for="categoria" class="form-label">Categoria</label>

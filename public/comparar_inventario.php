@@ -14,9 +14,9 @@ SELECT
     p.id,
     p.nome,
     p.codigo_barra,
-    p.quantidade AS estoque_sistema,
+    p.estoque AS estoque_sistema,
     IFNULL(f.quantidade_fisica, 0) AS estoque_fisico,
-    (IFNULL(f.quantidade_fisica, 0) - p.quantidade) AS diferenca,
+    (IFNULL(f.quantidade_fisica, 0) - p.estoque) AS diferenca,
     c.nome AS categoria
 FROM produtos p
 LEFT JOIN categorias c ON c.id = p.categoria_id
@@ -30,6 +30,7 @@ LEFT JOIN (
     )
 ) f ON f.produto_id = p.id
 ";
+
 
 $where = [];
 $params = [];
@@ -53,6 +54,9 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
