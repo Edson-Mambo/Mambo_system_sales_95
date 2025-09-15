@@ -2,34 +2,38 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
 require_once __DIR__ . '/../../config/database.php';
+require_once '../../config/config.php';
+include '../Template/header.php';
 
-
-// Conexão
+// --------------------------
+// Conexão com banco
 $pdo = Database::conectar();
 
-// Exemplo: definir nome do usuário logado
+// --------------------------
+// Usuário logado
 $usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário não identificado';
 
-// Gerar ou pegar o número do vale (pode ser um número incremental, UUID, etc.)
+// --------------------------
+// Número do vale
 $numero_vale = $_SESSION['numero_vale'] ?? uniqid('vale_');
 $_SESSION['numero_vale'] = $numero_vale;
 
-// Inicializa carrinho se não existir
+// --------------------------
+// Inicializa carrinho
 if (!isset($_SESSION['carrinho'])) {
     $_SESSION['carrinho'] = [];
 }
 $carrinho = &$_SESSION['carrinho'];
-$mensagem = '';
+$mensagem = $_SESSION['mensagem'] ?? '';
+unset($_SESSION['mensagem']);
 
-// ======================================
-// Se vier ?id_vale=xx -> carregar vale
-// ======================================
-
+// --------------------------
+// Carregar vale pelo GET ?id_vale
 if (isset($_GET['id_vale'])) {
     $id_vale = intval($_GET['id_vale']);
 
-    // Busca o vale com cliente
     $stmt = $pdo->prepare("
         SELECT v.*, c.nome AS cliente_nome, c.id AS cliente_id
         FROM vales v
@@ -40,15 +44,11 @@ if (isset($_GET['id_vale'])) {
     $vale = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($vale) {
-        // Atualiza sessão cliente_id
         $_SESSION['cliente_id'] = $vale['cliente_id'];
-
-        // Limpa carrinho atual
         $_SESSION['carrinho'] = [];
 
-        // Busca itens do vale
         $stmtItens = $pdo->prepare("
-            SELECT iv.*, p.nome 
+            SELECT iv.*, p.nome
             FROM itens_vale iv
             JOIN produtos p ON p.id = iv.produto_id
             WHERE iv.vale_id = ?
@@ -64,7 +64,6 @@ if (isset($_GET['id_vale'])) {
             ];
         }
 
-        // Redireciona para limpar o GET da URL e evitar recarregar sem querer
         header("Location: view_vale_formulario.php");
         exit;
     } else {
@@ -72,27 +71,24 @@ if (isset($_GET['id_vale'])) {
     }
 }
 
-// ===================
+// --------------------------
 // Adicionar produto
-// ===================
-if (isset($_POST['adicionar_produto'])) {
-    $busca = trim($_POST['produto_busca']);
-    $quantidade = (int)($_POST['quantidade'] ?? 1);
-    if ($quantidade < 1) $quantidade = 1;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar_produto'])) {
+    $busca = trim($_POST['produto_busca'] ?? '');
+    $quantidade = max(1, (int)($_POST['quantidade'] ?? 1));
 
     $stmt = $pdo->prepare("
-        SELECT id, nome, preco FROM produtos 
-        WHERE id = ? OR codigo_barra = ? OR nome LIKE ? 
+        SELECT id, nome, preco
+        FROM produtos
+        WHERE id = ? OR codigo_barra = ? OR nome LIKE ?
         LIMIT 1
     ");
     $idBusca = is_numeric($busca) ? (int)$busca : 0;
     $stmt->execute([$idBusca, $busca, "%$busca%"]);
-
     $produto = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($produto) {
         $codigo = $produto['id'];
-
         if (isset($carrinho[$codigo])) {
             $carrinho[$codigo]['quantidade'] += $quantidade;
         } else {
@@ -109,16 +105,26 @@ if (isset($_POST['adicionar_produto'])) {
     }
 }
 
-// ===================
-// Calcular total
-// ===================
+// --------------------------
+// Calcular total do carrinho
 $total = 0;
 foreach ($carrinho as $item) {
-    $subtotal = $item['preco'] * $item['quantidade'];
-    $total += $subtotal;
+    $total += $item['preco'] * $item['quantidade'];
 }
 
+// --------------------------
+// Obter cliente selecionado
+$cliente_id = $_SESSION['cliente_id'] ?? null;
+$cliente_nome = 'Nenhum cliente selecionado';
+if ($cliente_id) {
+    $stmtCli = $pdo->prepare("SELECT nome FROM clientes WHERE id = ?");
+    $stmtCli->execute([$cliente_id]);
+    if ($cli = $stmtCli->fetch(PDO::FETCH_ASSOC)) {
+        $cliente_nome = $cli['nome'];
+    }
+}
 ?>
+
 
 
 <!DOCTYPE html>
@@ -144,7 +150,7 @@ foreach ($carrinho as $item) {
       <span><strong>Vale nº:</strong> <?= htmlspecialchars($numero_vale) ?></span>
       <span><strong>Data/Hora:</strong> <?= date('d/m/Y H:i:s') ?></span>
     </div>
-    <a href="../src/View/venda.view.php" class="btn btn-sm btn-outline-secondary">⬅️ Voltar</a>
+    
     <a href="logout.php" class="btn btn-sm btn-outline-danger">🔒 Terminar Sessão</a>
   </div>
 
@@ -357,8 +363,21 @@ foreach ($carrinho as $item) {
       <div class="modal-body">
         <input type="hidden" name="numero_vale" value="<?= htmlspecialchars($numero_vale) ?>">
         <input type="hidden" name="cliente_id" id="cliente_id_salvar" value="">
+        
         <p>Confirme que deseja salvar o vale para o cliente selecionado.</p>
         <p><strong>Cliente: </strong> <span id="clienteSelecionadoTextoSalvar" class="text-primary fst-italic">Nenhum cliente selecionado</span></p>
+        
+        <!-- Campo Status -->
+        <div class="mb-3">
+          <label for="status_vale" class="form-label">Status do Vale</label>
+          <select id="status_vale" name="status_vale" class="form-select">
+            <option value="Aberto" selected>Aberto</option>
+            <option value="Parcelado">Parcelado</option>
+            <option value="Pago">Pago</option>
+          </select>
+          <small class="text-muted">O status será atualizado automaticamente quando algum valor for pago.</small>
+        </div>
+        
         <div class="mb-3">
           <label for="observacao_vale" class="form-label">Observação (opcional)</label>
           <textarea id="observacao_vale" name="observacao_vale" class="form-control" rows="3"></textarea>
@@ -391,7 +410,18 @@ foreach ($carrinho as $item) {
         <!-- Cliente ID -->
         <input type="hidden" name="cliente_id" id="cliente_id_finalizar">
 
-        <p><strong>Total a Pagar: </strong> MT <span id="total_pagar_texto"><?= number_format($total, 2, ',', '.') ?></span></p>
+        <!-- Status do Vale (Será enviado para atualizar) -->
+        <input type="hidden" name="status_vale" id="status_vale_modal" value="">
+
+        <p><strong>Total a Pagar: </strong> MT <span id="total_pagar_texto"><?= number_format($total ?? 0, 2, ',', '.') ?></span></p>
+
+        <div class="mb-3">
+          <label for="tipo_pagamento" class="form-label">Tipo de Pagamento</label>
+          <select id="tipo_pagamento" name="tipo_pagamento" class="form-select" required>
+            <option value="total" selected>Total</option>
+            <option value="parcial">Parcelado</option>
+          </select>
+        </div>
 
         <div class="mb-3">
           <label for="metodo_pagamento" class="form-label">Método de Pagamento</label>
@@ -427,8 +457,6 @@ foreach ($carrinho as $item) {
     </form>
   </div>
 </div>
-
-
 
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
@@ -499,11 +527,15 @@ $(function() {
     $('#modalBuscarCliente').modal('hide');
   });
 
-  /** Botão de Finalizar Vale seta o ID */
+  /** Botão de Finalizar Vale seta o ID e total */
   $('.btn-warning[data-bs-target="#modalFinalizarVale"]').on('click', function() {
     const idVale = $(this).data('id-vale');
+    const totalVale = $(this).data('total-vale') || total;
     $('#id_vale_modal').val(idVale);
-    $('#total_atualizado_modal').val(total);
+    $('#total_atualizado_modal').val(totalVale);
+    $('#valor_pago').val(totalVale.toFixed(2));
+    $('#troco').val('0,00');
+    $('#status_vale_modal').val('Aberto');
   });
 
   /** Mostrar/ocultar campo número de transação */
@@ -518,13 +550,28 @@ $(function() {
     }
   });
 
-  /** Calcular troco em tempo real */
-  $('#valor_pago').on('input', function() {
-    const pago = parseFloat($(this).val().replace(',', '.')) || 0;
+  /** Atualiza troco e status do vale em tempo real */
+  function atualizarStatusETroco() {
+    const valorPago = parseFloat($('#valor_pago').val().replace(',', '.')) || 0;
     const totalAtual = parseFloat($('#total_atualizado_modal').val().replace(',', '.')) || 0;
-    const troco = pago - totalAtual > 0 ? pago - totalAtual : 0;
+    const tipoPagamento = $('#tipo_pagamento').val();
+    let troco = 0;
+    let status = 'Aberto';
+
+    if (tipoPagamento === 'total' && valorPago >= totalAtual) {
+      troco = valorPago - totalAtual;
+      status = 'Pago';
+    } else if (tipoPagamento === 'parcial' && valorPago > 0 && valorPago < totalAtual) {
+      status = 'Parcelado';
+    } else if (valorPago === totalAtual) {
+      status = 'Pago';
+    }
+
     $('#troco').val(troco.toFixed(2).replace('.', ','));
-  });
+    $('#status_vale_modal').val(status);
+  }
+
+  $('#valor_pago, #tipo_pagamento').on('input change', atualizarStatusETroco);
 
   /** Submeter Vale Finalizar via AJAX */
   $('#formFinalizarVale').submit(function(e) {
@@ -554,7 +601,7 @@ $(function() {
     }, 'json').fail(() => alert('Erro na requisição.'));
   });
 
-  /** Buscar Vale Pendente (Opcional) */
+  /** Buscar Vale Pendente */
   $('#formBuscarValePendente').submit(function(e) {
     e.preventDefault();
     const termo = $('#buscar_vale_input').val().trim();
@@ -626,6 +673,7 @@ $(function() {
 
 });
 </script>
+
 
 </body>
 </html>

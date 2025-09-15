@@ -1,21 +1,28 @@
 <?php
-session_start();
 
-$timeout = 30 * 60; // 30 minutos em segundos
 
 if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
-    if (isset($_SESSION['ultimo_acesso'])) {
-        $tempo_inativo = time() - $_SESSION['ultimo_acesso'];
-        if ($tempo_inativo > $timeout) {
-            session_unset();
-            session_destroy();
-            header("Location: ../login.php?mensagem=Sessão expirada por inatividade.");
-            exit();
-        }
-    }
+    // Apenas atualiza o último acesso (opcional, pode até remover se não precisar)
     $_SESSION['ultimo_acesso'] = time();
 }
+
+// Inicia sessão
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Idioma atual
+$idioma = $_SESSION['lang'] ?? 'pt';
+
+include '../src/Template/header.php';
+require_once __DIR__ . '/../config/translate.php';
+
+
+
 ?>
+
+
+
 
 <!DOCTYPE html>
 <html lang="pt-MZ">
@@ -49,6 +56,8 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
             <li><a class="dropdown-item" href="cadastrar_usuario.php">Cadastrar Usuário</a></li>
             <li><a class="dropdown-item" href="cadastrar_produto_takeaway.php">Cadastrar Take Away</a></li>
             <li><a class="dropdown-item" href="ajustar_estoque.php">Ajustar Estoque</a></li>
+            <li><a class="dropdown-item" href="../src/View/recepcao_estoque.view.php" class="nav-link">Recepção de Estoque</a></li>
+
           </ul>
         </li>
 
@@ -78,12 +87,15 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
             <i class="fa-solid fa-chart-line"></i> Relatórios
           </a>
           <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório Vendas Gerais</a></li>
-            <li><a class="dropdown-item" href="relatorio_bebidas.php">Relatório Bebidas</a></li>
-            <li><a class="dropdown-item" href="relatorio_food.php">Relatório Foods</a></li>
+            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório Vendas</a></li>
+            <li><a class="dropdown-item" href="relatorio_venda_por_venda.php">Relatório Detalhado</a></li>
+            
+        
             <li><a class="dropdown-item" href="relatorios_teka_away.php">Relatório Take Away</a></li>
             <li><a class="dropdown-item" href="relatorio_logins.php">Relatório de Logins</a></li>
             <li><a class="dropdown-item" href="relatorio_estoque.php">Relatório de Estoque</a></li>
+            <li><a class="dropdown-item" href="../src/View/relatorio_recepcao.php">Relatório de Estoque Recebido</a></li>
+           
           </ul>
         </li>
 
@@ -106,6 +118,30 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
           <a class="nav-link" href="configuracoes/configuracoes.php">
             <i class="fa-solid fa-gear"></i> Configurações
           </a>
+        </li>
+
+       <!-- Dropdown de Idioma -->
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown">
+                🌐 <?= __('language'); ?>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="langDropdown">
+                <li>
+                    <a class="dropdown-item <?= $idioma == 'pt' ? 'active' : '' ?>" href="?lang=pt">
+                        🇲🇿 Português
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item <?= $idioma == 'en' ? 'active' : '' ?>" href="?lang=en">
+                        🇬🇧 English
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item <?= $idioma == 'es' ? 'active' : '' ?>" href="?lang=es">
+                        🇪🇸 Español
+                    </a>
+                </li>
+            </ul>
         </li>
 
       </ul>

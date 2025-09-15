@@ -17,6 +17,9 @@
     ],
     "require": {
         "dompdf/dompdf": "^3.1",
-        "phpmailer/phpmailer": "^6.10"
+        "phpmailer/phpmailer": "^6.10",
+        "mpdf/mpdf": "*",
+        "mike42/escpos-php": "^2.2",
+        "tecnickcom/tcpdf": "^6.10"
     }
   }

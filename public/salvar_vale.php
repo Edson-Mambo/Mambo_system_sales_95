@@ -5,8 +5,9 @@ $pdo = Database::conectar();
 
 header('Content-Type: application/json');
 
-$cliente_id = $_SESSION['cliente_id'] ?? null;
-$status_pagamento = $_POST['status_pagamento'] ?? 'pendente';
+// Recebe o cliente_id e status do POST enviado pelo modal
+$cliente_id = $_POST['cliente_id'] ?? null;
+$status_pagamento = $_POST['status_vale'] ?? 'Aberto';
 $carrinho = $_SESSION['carrinho'] ?? [];
 
 if (!$cliente_id || empty($carrinho)) {
@@ -26,7 +27,7 @@ try {
         $total_vale += $item['preco'] * $item['quantidade'];
     }
 
-    // Insere o vale com o valor total
+    // Insere o vale com o valor total e status
     $stmt = $pdo->prepare("INSERT INTO vales (numero_vale, cliente_id, status_pagamento, valor_total, data_criacao) VALUES (?, ?, ?, ?, NOW())");
     $stmt->execute([$numero_vale, $cliente_id, $status_pagamento, $total_vale]);
 
@@ -38,11 +39,14 @@ try {
         $stmtItem->execute([$id_vale, $item['id'], $item['quantidade'], $item['preco']]);
     }
 
+    // Limpa o carrinho após salvar o vale
     unset($_SESSION['carrinho']);
 
     echo json_encode([
         'success' => true,
-        'mensagem' => 'Vale salvo com sucesso!'
+        'mensagem' => 'Vale salvo com sucesso!',
+        'numero_vale' => $numero_vale,
+        'status' => $status_pagamento
     ]);
 
 } catch (Exception $e) {

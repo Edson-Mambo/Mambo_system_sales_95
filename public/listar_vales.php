@@ -6,11 +6,12 @@ $pdo = Database::conectar();
 
 // Buscar vales não pagos
 $stmt = $pdo->prepare("
-  SELECT v.id, c.nome AS cliente_nome, v.valor_total, v.valor_pago, v.saldo, v.status, v.data_criacao
+  SELECT v.id, c.nome AS cliente_nome, v.valor_total, COALESCE(v.valor_pago,0) AS valor_pago, 
+         COALESCE(v.saldo,0) AS saldo, v.status, v.data_registro AS data_criacao
   FROM vales v
   LEFT JOIN clientes c ON v.cliente_id = c.id
   WHERE v.status != 'pago'
-  ORDER BY v.data_criacao DESC
+  ORDER BY v.data_registro DESC
 ");
 $stmt->execute();
 $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -25,13 +26,14 @@ $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body class="p-4">
 <div class="container">
-  <h2>Vales Não Finalizados</h2>
+  <h2 class="mb-4">Vales Não Finalizados</h2>
 
   <?php if (empty($vales)): ?>
     <div class="alert alert-info">Nenhum vale não finalizado encontrado.</div>
   <?php else: ?>
-    <form method="post" action="vales_carregar.php">
-      <table class="table table-bordered table-hover align-middle mt-4">
+    <form method="post" action="venda_vale.php">
+      <input type="hidden" name="carregar_vale" value="1">
+      <table class="table table-bordered table-hover align-middle">
         <thead class="table-dark">
           <tr>
             <th>Selecionar</th>
@@ -42,6 +44,7 @@ $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <th>Saldo</th>
             <th>Status</th>
             <th>Data</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -55,22 +58,27 @@ $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
             ?>
             <tr>
               <td class="text-center">
-                <input type="radio" name="id_vale" value="<?= $vale['id'] ?>" required>
+                <input type="radio" name="id_vale" value="<?= (int)$vale['id'] ?>" required>
               </td>
-              <td><?= $vale['id'] ?></td>
+              <td><?= (int)$vale['id'] ?></td>
               <td><?= htmlspecialchars($vale['cliente_nome'] ?? 'Sem Cliente') ?></td>
               <td>MT <?= number_format($vale['valor_total'], 2, ',', '.') ?></td>
               <td>MT <?= number_format($vale['valor_pago'], 2, ',', '.') ?></td>
               <td>MT <?= number_format($vale['saldo'], 2, ',', '.') ?></td>
               <td class="<?= $cor ?>"><?= htmlspecialchars($vale['status']) ?></td>
               <td><?= date('d/m/Y H:i', strtotime($vale['data_criacao'])) ?></td>
+              <td>
+                <a href="visualizar_vale.php?id=<?= (int)$vale['id'] ?>" class="btn btn-info btn-sm">
+                  Visualizar Vale
+                </a>
+              </td>
             </tr>
           <?php endforeach; ?>
         </tbody>
       </table>
 
       <div class="d-grid col-md-4 mx-auto mt-3">
-        <button type="submit" class="btn btn-primary">Carregar Vale Selecionado</button>
+        <button type="submit" class="btn btn-primary btn-lg">Carregar Vale Selecionado</button>
       </div>
     </form>
   <?php endif; ?>

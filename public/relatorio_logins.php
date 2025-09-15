@@ -46,9 +46,9 @@ try {
     <h2 class="mb-4">Relatório de Logins</h2>
 
     <div class="text-center mt-4">
-            <<a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+            <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
         </div>
-
+<br>
 
     <?php if (count($logins) > 0): ?>
     <table class="table table-bordered table-striped">

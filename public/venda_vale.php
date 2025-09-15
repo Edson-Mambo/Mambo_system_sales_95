@@ -3,28 +3,54 @@ session_start();
 require_once '../config/database.php';
 require_once __DIR__ . '/configuracoes/logMiddleware.php';
 
+// --------------------------
+// Conexão com banco
 $pdo = Database::conectar();
 
-// Garante que tenha número do vale
+// --------------------------
+// Funções utilitárias
+function calcularTotal(array $itens): float {
+    $soma = 0;
+    foreach ($itens as $i) {
+        $soma += $i['preco'] * $i['quantidade'];
+    }
+    return $soma;
+}
+
+function buscarProduto(PDO $pdo, string $busca) {
+    $stmt = $pdo->prepare("SELECT * FROM produtos WHERE codigo_barra = ? OR nome LIKE ? LIMIT 1");
+    $stmt->execute([$busca, "%$busca%"]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function carregarVale(PDO $pdo, int $id_vale) {
+    $stmt = $pdo->prepare("SELECT * FROM vales WHERE id = ? AND status != 'pago'");
+    $stmt->execute([$id_vale]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function carregarItensVale(PDO $pdo, int $id_vale) {
+    $stmt = $pdo->prepare("
+        SELECT iv.produto_id, iv.quantidade, iv.preco_unitario AS preco, p.nome
+        FROM itens_vale iv
+        JOIN produtos p ON iv.produto_id = p.id
+        WHERE iv.vale_id = ?
+    ");
+    $stmt->execute([$id_vale]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// --------------------------
+// Inicializar variáveis de sessão
 if (!isset($_SESSION['numero_vale'])) {
     $_SESSION['numero_vale'] = rand(1000, 9999);
 }
 $numero_vale = $_SESSION['numero_vale'];
 
-// Inicializa carrinho se não existir
 if (!isset($_SESSION['vale_carrinho'])) {
     $_SESSION['vale_carrinho'] = [];
 }
 $carrinho = &$_SESSION['vale_carrinho'];
-
-// Função para calcular total
-function calcularTotal($itens) {
-    $s = 0;
-    foreach ($itens as $i) {
-        $s += $i['preco'] * $i['quantidade'];
-    }
-    return $s;
-}
 
 $erro = '';
 $mensagem = $_SESSION['mensagem'] ?? '';
@@ -32,7 +58,6 @@ unset($_SESSION['mensagem']);
 
 $cliente_id = $_SESSION['cliente_id'] ?? null;
 $clienteSelecionadoNome = 'Nenhum cliente selecionado';
-
 if ($cliente_id) {
     $stmtCli = $pdo->prepare("SELECT nome FROM clientes WHERE id = ?");
     $stmtCli->execute([$cliente_id]);
@@ -43,7 +68,33 @@ if ($cliente_id) {
 
 $total = calcularTotal($carrinho);
 
-// 1. Salvar vale
+// --------------------------
+// 0. Carregar Vale
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_vale'])) {
+    $id_vale = (int)$_POST['id_vale'];
+    if ($vale = carregarVale($pdo, $id_vale)) {
+        $_SESSION['cliente_id'] = $vale['cliente_id'];
+        $_SESSION['vale_carrinho'] = [];
+
+        foreach (carregarItensVale($pdo, $id_vale) as $item) {
+            $_SESSION['vale_carrinho'][$item['produto_id']] = [
+                'id' => $item['produto_id'],
+                'nome' => $item['nome'],
+                'preco' => $item['preco'],
+                'quantidade' => $item['quantidade']
+            ];
+        }
+
+        $_SESSION['mensagem'] = "Vale #{$vale['numero_vale']} carregado para pagamento.";
+        header('Location: venda_vale.php');
+        exit;
+    } else {
+        $erro = "Vale não encontrado ou já finalizado.";
+    }
+}
+
+// --------------------------
+// 1. Salvar Vale (Ajax)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save'])) {
     header('Content-Type: application/json');
 
@@ -61,31 +112,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save'])) {
             $num = rand(1000, 9999);
         }
 
+        // Buscar nome e telefone do cliente
+        $stmtCli = $pdo->prepare("SELECT nome, telefone FROM clientes WHERE id = ?");
+        $stmtCli->execute([$cliente_id_post]);
+        $cliente = $stmtCli->fetch(PDO::FETCH_ASSOC);
+
         $saldo = ($status === 'pago') ? 0 : $total_post;
 
+        // Inserir vale
         $stmt = $pdo->prepare("
             INSERT INTO vales (cliente_id, numero_vale, cliente_nome, cliente_telefone, valor_total, status, saldo, data_registro)
-            SELECT ?, ?, nome, telefone, ?, ?, ?, NOW() FROM clientes WHERE id = ?
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->execute([$cliente_id_post, $num, $total_post, $status, $saldo, $cliente_id_post]);
+        $stmt->execute([$cliente_id_post, $num, $cliente['nome'], $cliente['telefone'], $total_post, $status, $saldo]);
 
         $valeId = $pdo->lastInsertId();
 
-        $stmtItem = $pdo->prepare("
-            INSERT INTO itens_vale (vale_id, produto_id, quantidade, preco_unitario)
-            VALUES (?, ?, ?, ?)
-        ");
-
-        $stmtBaixa = $pdo->prepare("
-            UPDATE produtos SET estoque = estoque - ? WHERE id = ?
-        ");
+        // Inserir itens e atualizar estoque
+        $stmtItem = $pdo->prepare("INSERT INTO itens_vale (vale_id, produto_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)");
+        $stmtBaixa = $pdo->prepare("UPDATE produtos SET estoque = estoque - ? WHERE id = ?");
 
         foreach ($carrinho as $it) {
             $stmtItem->execute([$valeId, $it['id'], $it['quantidade'], $it['preco']]);
             $stmtBaixa->execute([$it['quantidade'], $it['id']]);
         }
 
-        // Limpa carrinho e número do vale
         $_SESSION['vale_carrinho'] = [];
         unset($_SESSION['numero_vale']);
 
@@ -96,7 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_save'])) {
     exit;
 }
 
-// 2. Buscar cliente
+// --------------------------
+// 2. Buscar Cliente
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscar_cliente'])) {
     $busca = trim($_POST['cliente_nome_ou_telefone'] ?? '');
     if ($busca !== '') {
@@ -118,14 +170,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscar_cliente'])) {
     }
 }
 
-// 3. Selecionar cliente
+// --------------------------
+// 3. Selecionar Cliente
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['selecionar_cliente_id'])) {
     $_SESSION['cliente_id'] = (int)$_POST['selecionar_cliente_id'];
     header('Location: venda_vale.php');
     exit;
 }
 
-// 4. Cadastrar cliente
+// --------------------------
+// 4. Cadastrar Cliente
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_cliente'])) {
     $nome = trim($_POST['nome'] ?? '');
     $telefone = trim($_POST['telefone'] ?? '');
@@ -147,57 +201,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cadastrar_cliente']))
     }
 }
 
-// 5. Buscar vale
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscar_vale'])) {
-    $numero = trim($_POST['numero_vale'] ?? '');
-    if ($numero !== '') {
-        $stmt = $pdo->prepare("SELECT * FROM vales WHERE numero_vale = ? AND status != 'pago'");
-        $stmt->execute([$numero]);
-        if ($vale = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $_SESSION['cliente_id'] = $vale['cliente_id'];
-            $carrinho = [];
+// --------------------------
+// 5. Buscar Vale pelo Cliente
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buscar_vale_cliente'])) {
+    $nomeCliente = trim($_POST['nome_cliente'] ?? '');
+    if ($nomeCliente !== '') {
+        $stmt = $pdo->prepare("SELECT * FROM vales WHERE cliente_nome LIKE ? AND status != 'pago'");
+        $stmt->execute(["%$nomeCliente%"]);
+        $vales = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $stmtItens = $pdo->prepare("
-                SELECT iv.*, p.nome, p.preco_venda 
-                FROM itens_vale iv
-                JOIN produtos p ON iv.produto_id = p.id
-                WHERE iv.vale_id = ?
-            ");
-            $stmtItens->execute([$vale['id']]);
-            foreach ($stmtItens->fetchAll(PDO::FETCH_ASSOC) as $it) {
-                $carrinho[$it['produto_id']] = [
+        if (count($vales) === 0) {
+            $erro = "Nenhum vale encontrado para o cliente informado.";
+        } elseif (count($vales) === 1) {
+            $vale = $vales[0];
+            $_SESSION['cliente_id'] = $vale['cliente_id'];
+            $_SESSION['vale_carrinho'] = [];
+
+            foreach (carregarItensVale($pdo, $vale['id']) as $it) {
+                $_SESSION['vale_carrinho'][$it['produto_id']] = [
                     'id' => $it['produto_id'],
                     'nome' => $it['nome'],
-                    'preco' => $it['preco_venda'],
-                    'quantidade' => $it['quantidade'],
+                    'preco' => $it['preco'],
+                    'quantidade' => $it['quantidade']
                 ];
             }
 
-            $_SESSION['mensagem'] = "Vale #{$numero} carregado.";
+            $_SESSION['mensagem'] = "Vale de {$vale['cliente_nome']} carregado.";
             header('Location: venda_vale.php');
             exit;
         } else {
-            $erro = "Vale não encontrado ou já finalizado.";
+            $_SESSION['vales_encontrados'] = $vales;
+            header('Location: venda_vale.php');
+            exit;
         }
     } else {
-        $erro = "Informe número do vale.";
+        $erro = "Digite o nome do cliente para buscar o vale.";
     }
 }
 
-// 6. Adicionar produto
+// --------------------------
+// 6. Adicionar Produto
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar_produto'])) {
     $busca = trim($_POST['produto_busca'] ?? '');
     $qtd = (int)($_POST['quantidade'] ?? 0);
     if ($busca && $qtd > 0) {
-        $stmt = $pdo->prepare("SELECT * FROM produtos WHERE codigo_barra = ? OR nome LIKE ? LIMIT 1");
-        $stmt->execute([$busca, "%$busca%"]);
-        if ($p = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        if ($p = buscarProduto($pdo, $busca)) {
             $id = $p['id'];
             $estoque_disponivel = (int)$p['estoque'];
-            $quantidade_no_carrinho = isset($carrinho[$id]) ? $carrinho[$id]['quantidade'] : 0;
-            $quantidade_total = $quantidade_no_carrinho + $qtd;
+            $quantidade_no_carrinho = $carrinho[$id]['quantidade'] ?? 0;
 
-            if ($quantidade_total > $estoque_disponivel) {
+            if (($quantidade_no_carrinho + $qtd) > $estoque_disponivel) {
                 $erro = "Estoque insuficiente! Disponível: {$estoque_disponivel}";
             } else {
                 if (isset($carrinho[$id])) {
@@ -206,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar_produto']))
                     $carrinho[$id] = [
                         'id' => $p['id'],
                         'nome' => $p['nome'],
-                        'preco' => $p['preco_venda'],
+                        'preco' => $p['preco'],
                         'quantidade' => $qtd
                     ];
                 }
@@ -222,7 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar_produto']))
     }
 }
 
-// 7. Remover produto
+// --------------------------
+// 7. Remover Produto
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remover_produto'])) {
     $removerId = (int)$_POST['remover_produto'];
     if (isset($carrinho[$removerId])) {
@@ -233,5 +287,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remover_produto'])) {
     exit;
 }
 
-// View
+// --------------------------
+// Atualiza total antes de carregar a view
+$total = calcularTotal($carrinho);
+
+// --------------------------
+// Carregar view
 include '../src/View/view_vale_formulario.php';

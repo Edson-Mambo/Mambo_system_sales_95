@@ -1,45 +1,89 @@
 <?php
-namespace Src\Utils;
+session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-use Dompdf\Dompdf;
+require_once __DIR__ . '/../config/database.php';
+require __DIR__ . '/../vendor/autoload.php';
 
-class ReciboGenerator
-{
-    public static function gerarRecibo(array $produtos, float $total, int $vendaId): string
-    {
-        $html = "<h2>Recibo de Venda #$vendaId</h2>";
-        $html .= "<table border='1' cellpadding='5' cellspacing='0' width='100%'>";
-        $html .= "<tr><th>Produto</th><th>Qtd</th><th>Preço</th><th>Total</th></tr>";
+use Mike42\Escpos\Printer;
+use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
 
-        foreach ($produtos as $item) {
-            $produto = $item['produto'];
-            $quantidade = $item['quantidade'];
-            $preco = number_format($produto->getPreco(), 2);
-            $subtotal = number_format($quantidade * $produto->getPreco(), 2);
+$venda_id = $_GET['venda_id'] ?? null;
+if (!$venda_id) {
+    http_response_code(400);
+    exit(json_encode(["success" => false, "erro" => "Venda não encontrada."]));
+}
 
-            $html .= "<tr>
-                <td>{$produto->getNome()}</td>
-                <td>{$quantidade}</td>
-                <td>{$preco}</td>
-                <td>{$subtotal}</td>
-            </tr>";
-        }
+// Buscar venda
+$stmtVenda = $pdo->prepare("SELECT v.*, u.nome AS nome_usuario 
+    FROM vendas v
+    LEFT JOIN usuarios u ON v.usuario_id = u.id
+    WHERE v.id = ?");
+$stmtVenda->execute([$venda_id]);
+$venda = $stmtVenda->fetch(PDO::FETCH_ASSOC);
 
-        $html .= "<tr><td colspan='3'><strong>Total</strong></td><td><strong>" . number_format($total, 2) . "</strong></td></tr>";
-        $html .= "</table>";
-        $html .= "<p>Data: " . date('d/m/Y H:i') . "</p>";
+if (!$venda) {
+    http_response_code(404);
+    exit(json_encode(["success" => false, "erro" => "Venda não encontrada."]));
+}
 
-        // Gera o PDF
-        $dompdf = new Dompdf();
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+// Buscar produtos
+$stmtProdutos = $pdo->prepare("SELECT pv.*, p.nome AS nome_produto 
+    FROM produtos_vendidos pv
+    LEFT JOIN produtos p ON pv.produto_id = p.id
+    WHERE pv.venda_id = ?");
+$stmtProdutos->execute([$venda_id]);
+$produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
 
-        $output = $dompdf->output();
-        $filename = 'recibo_' . $vendaId . '.pdf';
-        $filePath = __DIR__ . '/../../public/recibos/' . $filename;
-        file_put_contents($filePath, $output);
+try {
+    // ⚠️ Nome EXATO da impressora no Windows
+    $connector = new WindowsPrintConnector("BIXOLON SRP-350");
+    $printer   = new Printer($connector);
 
-        return '/public/recibos/' . $filename; // Caminho público
+    // --- Cabeçalho ---
+    $printer->setJustification(Printer::JUSTIFY_CENTER);
+    $printer->setEmphasis(true);
+    $printer->text("Mambo System Sales 95\n");
+    $printer->setEmphasis(false);
+    $printer->text("Recibo de Venda\n");
+    $printer->text("Nº " . $venda['numero_recibo'] . "\n");
+    $printer->text(date("d/m/Y H:i:s", strtotime($venda['data_hora'])) . "\n");
+    $printer->text("Operador: " . $venda['nome_usuario'] . "\n");
+    $printer->text("--------------------------------\n");
+
+    // --- Produtos ---
+    foreach ($produtos as $item) {
+        $nome     = substr($item['nome_produto'], 0, 20);
+        $qtd      = $item['quantidade'];
+        $subtotal = number_format($item['subtotal'], 2, ',', '.');
+
+        $line = str_pad($nome, 20)
+              . str_pad($qtd, 5, " ", STR_PAD_LEFT)
+              . str_pad($subtotal, 10, " ", STR_PAD_LEFT) . "\n";
+
+        $printer->text($line);
     }
+
+    $printer->text("--------------------------------\n");
+
+    // --- Totais ---
+    $printer->setJustification(Printer::JUSTIFY_RIGHT);
+    $printer->text("TOTAL: MT " . number_format($venda['total'], 2, ',', '.') . "\n");
+    $printer->text("Recebido: MT " . number_format($venda['valor_recebido'], 2, ',', '.') . "\n");
+    $printer->text("Troco: MT " . number_format($venda['troco'], 2, ',', '.') . "\n");
+
+    // --- Mensagem final ---
+    $printer->feed(2);
+    $printer->setJustification(Printer::JUSTIFY_CENTER);
+    $printer->text("Obrigado pela preferência!\n");
+
+    // --- Corte ---
+    $printer->cut();
+    $printer->close();
+
+    echo json_encode(["success" => true]);
+
+} catch (Exception $e) {
+    echo json_encode(["success" => false, "erro" => $e->getMessage()]);
 }
