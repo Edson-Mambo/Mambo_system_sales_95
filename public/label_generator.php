@@ -55,6 +55,7 @@ input, button {
 
 <h2>🏷️ Gerador de Labels de Produtos</h2>
 
+
 <!-- SKU SEARCH -->
 <input type="text" id="sku" placeholder="Digite SKU / Código de barras">
 <button class="btn" onclick="buscarProduto()">Pesquisar</button>
@@ -77,8 +78,12 @@ style="width:100%; height:80px;"></textarea>
 <br>
 
 <button class="btn" onclick="gerarMultiplosSKUs()">Gerar Labels A4</button>
+<br>
+<br>
 
+ <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
 </div>
+
 
 <script>
 

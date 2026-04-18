@@ -134,6 +134,7 @@ unset($_SESSION['mensagem']);
           </a>
         <?php endforeach; ?>
       </nav>
+       <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
     </aside>
 
     <section class="content">
@@ -141,8 +142,11 @@ unset($_SESSION['mensagem']);
 
       <!-- Voltar -->
       <a href="../src/View/inventario.view.php" class="btn btn-outline-secondary mb-3">← Voltar para Visualizar Inventário</a>
+  
+      <button type="submit" class="btn btn-success">💾 Salvar Inventário</button>
 
-      <h1>📝 Inventário Físico - <?= htmlspecialchars($categoriaSelecionada) ?></h1>
+      <h1>📝 Inventário Físico - <?= htmlspecialchars($categoriaSelecionada) ?>
+    </h1>
 
       <?php if (!empty($mensagem)): ?>
         <div class="alert alert-info"><?= htmlspecialchars($mensagem) ?></div>
@@ -186,10 +190,7 @@ unset($_SESSION['mensagem']);
           </table>
         </div>
 
-        <div class="text-end mt-3">
-          <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
-          <button type="submit" class="btn btn-success">💾 Salvar Inventário</button>
-        </div>
+        
       </form>
     </section>
   </div>

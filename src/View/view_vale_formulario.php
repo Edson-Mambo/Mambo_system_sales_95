@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once '../../config/config.php';
 include '../Template/header.php';
 
+
 // --------------------------
 // Conexão com banco
 $pdo = Database::conectar();
@@ -133,6 +134,9 @@ if ($cliente_id) {
 <meta charset="UTF-8" />
 <title>📋 Criar Novo Vale - MamboSystem95</title>
 <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="../bootstrap/bootstrap-5.3.3/js/jquery.min.js" rel="script" />
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <style>
   #modalFinalizarVale input.form-control, #modalCadastrarCliente input.form-control {
     font-weight: bold;

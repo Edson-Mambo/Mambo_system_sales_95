@@ -103,6 +103,7 @@ foreach ($categorias as $categoria) {
   <?php foreach ($relatorio as $cat): ?>
     <a href="#cat-<?= $cat['id'] ?>"><?= htmlspecialchars($cat['categoria']) ?></a>
   <?php endforeach; ?>
+  <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
 </div>
 
 <!-- Conteúdo -->

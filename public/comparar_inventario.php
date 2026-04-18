@@ -170,6 +170,7 @@ $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?= htmlspecialchars($categoria) ?>
           </a>
         <?php endforeach; ?>
+        <a href="index_admin.php" class="btn btn-outline-secondary btn-voltar">← Voltar ao Painel</a>
       </nav>
     </aside>
 
@@ -225,7 +226,7 @@ $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </tbody>
       </table>
 
-      <a href="index_admin.php" class="btn btn-outline-secondary btn-voltar">← Voltar ao Painel</a>
+      
     </section>
 
   </div>

@@ -300,8 +300,8 @@ body {
         <div class="menu-item">
             <a href="#">Vales ▾</a>
             <div class="dropdown">
-                <a href="listar_vales.php">Emitir Vales</a>
-                <a href="historico_vales.php">Histórico</a>
+                <a href="../src/View/view_vale_formulario.php">Emitir Vales</a>
+                <a href="listar_vales.php">Histórico</a>
             </div>
         </div>
 

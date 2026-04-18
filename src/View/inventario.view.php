@@ -72,9 +72,17 @@ $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </li>
         
       </ul>
+      <!-- Botão voltar -->
+    <div>
+        <a href="../../public/index_admin.php" class="btn btn-secondary">
+            ← Voltar ao Painel
+        </a>
+    </div>
       <div class="d-flex">
+        
         <a href="../../public/logout.php" class="btn btn-danger btn-lg">Terminar Sessão</a>
       </div>
+      
     </div>
   </div>
 </nav>

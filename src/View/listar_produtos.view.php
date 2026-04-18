@@ -223,6 +223,12 @@ $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
         <?= htmlspecialchars($cat['nome']) ?>
       </a>
     <?php endforeach; ?>
+    <!-- Botão voltar -->
+    <div class="text-center mt-4">
+        <a href="../../public/index_admin.php" class="btn btn-secondary">
+            ← Voltar ao Painel
+        </a>
+    </div>
   </nav>
 
   <main class="main-content">

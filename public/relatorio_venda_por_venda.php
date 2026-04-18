@@ -39,7 +39,7 @@ $controller = new Controller\VendaController($pdo);
 <body class="p-4">
 <div class="container">
     <h2 class="mb-4">Relatório de Vendas Por Venda</h2>
-
+ <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
     <?php if(empty($vendas)): ?>
         <p>Nenhuma venda registrada.</p>
     <?php else: ?>
