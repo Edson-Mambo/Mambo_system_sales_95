@@ -7,77 +7,77 @@ namespace Composer\Autoload;
 class ComposerStaticInite87558d66c1f21693a0ddb5066b78fdf
 {
     public static $prefixLengthsPsr4 = array (
-        'V' => 
+        'V' =>
         array (
             'View\\' => 5,
         ),
-        'S' => 
+        'S' =>
         array (
             'Svg\\' => 4,
             'Sabberworm\\CSS\\' => 15,
         ),
-        'P' => 
+        'P' =>
         array (
             'PHPMailer\\PHPMailer\\' => 20,
         ),
-        'M' => 
+        'M' =>
         array (
             'Model\\' => 6,
             'Mike42\\' => 7,
             'Masterminds\\' => 12,
         ),
-        'F' => 
+        'F' =>
         array (
             'FontLib\\' => 8,
         ),
-        'D' => 
+        'D' =>
         array (
             'Dompdf\\' => 7,
         ),
-        'C' => 
+        'C' =>
         array (
             'Controller\\' => 11,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'View\\' => 
+        'View\\' =>
         array (
             0 => __DIR__ . '/../..' . '/src/View',
         ),
-        'Svg\\' => 
+        'Svg\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/php-svg-lib/src/Svg',
         ),
-        'Sabberworm\\CSS\\' => 
+        'Sabberworm\\CSS\\' =>
         array (
             0 => __DIR__ . '/..' . '/sabberworm/php-css-parser/src',
         ),
-        'PHPMailer\\PHPMailer\\' => 
+        'PHPMailer\\PHPMailer\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
         ),
-        'Model\\' => 
+        'Model\\' =>
         array (
             0 => __DIR__ . '/../..' . '/src/Model',
         ),
-        'Mike42\\' => 
+        'Mike42\\' =>
         array (
             0 => __DIR__ . '/..' . '/mike42/escpos-php/src/Mike42',
         ),
-        'Masterminds\\' => 
+        'Masterminds\\' =>
         array (
             0 => __DIR__ . '/..' . '/masterminds/html5/src',
         ),
-        'FontLib\\' => 
+        'FontLib\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/php-font-lib/src/FontLib',
         ),
-        'Dompdf\\' => 
+        'Dompdf\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/dompdf/src',
         ),
-        'Controller\\' => 
+        'Controller\\' =>
         array (
             0 => __DIR__ . '/../..' . '/src/Controller',
         ),

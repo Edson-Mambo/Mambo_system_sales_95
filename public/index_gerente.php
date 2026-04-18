@@ -1,159 +1,204 @@
 <?php
 session_start();
 
-$timeout = 30 * 60; // 30 minutos em segundos
+require_once "../middleware/auth.php";
+requireRole(['admin','gerente']);
 
-// Verifica se o usuário está logado e tem nível de acesso válido
-if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
+$timeout = 30 * 60;
+
+if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin','gerente'])) {
+
     if (isset($_SESSION['ultimo_acesso'])) {
-        $tempo_inativo = time() - $_SESSION['ultimo_acesso'];
-        if ($tempo_inativo > $timeout) {
-            // Tempo de inatividade excedeu o limite - destruir sessão e redirecionar para login
+        if (time() - $_SESSION['ultimo_acesso'] > $timeout) {
             session_unset();
             session_destroy();
-            header("Location: ../login.php?mensagem=Sessão expirada por inatividade.");
+            header("Location: ../login.php?mensagem=Sessão expirada.");
             exit();
         }
     }
-    // Atualiza o timestamp do último acesso
+
     $_SESSION['ultimo_acesso'] = time();
 }
 ?>
 
-
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <title>Mambo System 95 - Gerente</title>
-    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
-    <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
-    <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">MamboSystem95 - Getenre</a>
+<meta charset="UTF-8">
+<title>Mambo System 95 - Gerente</title>
 
-    <!-- Botão toggle para dispositivos móveis -->
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="Alternar navegação">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 
-    <div class="collapse navbar-collapse" id="navbarMain">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-        <!-- Dropdown Cadastros -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="cadastroDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Cadastros
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="cadastroDropdown">
-            <li><a class="dropdown-item" href="cadastrar_produto.php">Cadastrar Produto</a></li>
-            <li><a class="dropdown-item" href="cadastrar_usuario.php">Cadastrar Usuário</a></li>
-            <li><a class="dropdown-item" href="cadastrar_produto_takeaway.php">Cadastrar Produtos Take Away</a></li>
-            <li><a class="dropdown-item" href="ajustar_estoque.php">Ajustar Estoque</a></li>
-          </ul>
-        </li>
+<!-- BARRA SUPERIOR CUSTOM (Electron POS) -->
+<div class="top-bar">
+  <button onclick="window.api.minimize()">_</button>
+  <button onclick="window.api.maximize()">[]</button>
+  <button onclick="window.api.close()">X</button>
+</div>
 
-        <!-- Listagens -->
-        <li class="nav-item">
-          <a class="nav-link" href="../src/View/listar_produtos.view.php">Listar Produtos</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="listar_takeaway.php">Listar Take Away</a>
-        </li>
-
-        <!-- Dropdown Relatórios -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="relatorioDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            Relatórios
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="relatorioDropdown">
-            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório de Vendas</a></li>
-            <li><a class="dropdown-item" href="relatorio_bebidas.php">Relatório de Bebidas</a></li>
-            <li><a class="dropdown-item" href="relatorio_mercearia.php">Relatório de Produtos de Mercearia</a></li>
-            <li><a class="dropdown-item" href="relatorio_vales.php">Relatório de Vales</a></li>
-            <li><a class="dropdown-item" href="relatorios_teka_away.php">Relatório de Take Away</a></li>
-            <li><a class="dropdown-item" href="fecho_dia.php">Fecho do Dia</a></li>
-          </ul>
-        </li>
-
-        <!-- Outras opções -->
-        
-        <li class="nav-item"><a class="nav-link" href="configuracoes/configuracoes.php">Configurações do Sistema</a></li>
-      </ul>
-
-      <!-- Botão Terminar Sessão -->
-      <div class="d-flex">
-        <a href="logout.php" class="btn btn-danger btn-lg">Terminar Sessão</a>
-      </div>
-    </div>
-  </div>
-</nav>
 
 <style>
-    body {
-        background: linear-gradient(to right, #e3f2fd, #f8f9fa);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-    }
+.top-bar {
+  position: fixed;
+top: 50px;
+  left: 0;
+  right: 0;
+  height: 40px;
+  
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+}
 
-    .container {
-        max-width: 1100px;
-        background-color: #ffffff;
-        border-radius: 20px;
-        padding: 3rem;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
-    }
+.top-bar button {
+  width: 35px;
+  height: 30px;
+  border: none;
+  cursor: pointer;
+  color: white;
+  background: #333;
+}
 
-    .dashboard-card {
-        border-radius: 20px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        cursor: default;
-        background-color: #f1f3f5;
-        border: none;
-    }
+.top-bar button:hover {
+  background: #555;
+}
 
-    .dashboard-card:hover {
-        transform: translateY(-5px) scale(1.03);
-        box-shadow: 0 0 25px rgba(13, 110, 253, 0.3);
-    }
-
-    .card-title {
-        font-weight: 700;
-        color: #0d6efd;
-        margin-bottom: 1rem;
-    }
-
-    .card-text {
-        font-size: 2.8rem;
-        font-weight: 700;
-        color: #212529;
-    }
-
-    .header-title {
-        font-weight: 900;
-        color: #0d6efd;
-        text-align: center;
-        margin-bottom: 3rem;
-        font-size: 2.5rem;
-    }
-
-    .btn-danger {
-        padding: 0.75rem 2rem;
-        font-size: 1.1rem;
-        border-radius: 10px;
-        font-weight: 600;
-    }
+.top-bar button:last-child {
+  background: red;
+}
 </style>
 
 
+<style>
+body{
+    background: linear-gradient(to right, #e3f2fd, #f8f9fa);
+    font-family: 'Segoe UI';
+}
 
+/* HEADER */
+.header {
+    background: linear-gradient(90deg,#0d6efd,#084298);
+    color:white;
+    padding:25px;
+    border-radius:16px;
+    margin-top:20px;
+}
+
+/* CARD ACTIONS */
+.action-box{
+    background:white;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.08);
+    height:100%;
+}
+
+.action-title{
+    font-weight:700;
+    margin-bottom:15px;
+    color:#0d6efd;
+}
+
+.btn-action{
+    display:block;
+    padding:12px;
+    border-radius:10px;
+    text-decoration:none;
+    font-weight:600;
+    margin-bottom:10px;
+    transition:.3s;
+    text-align:center;
+}
+
+.btn-cash{ background:#198754; color:white; }
+.btn-cash:hover{ background:#157347; transform:scale(1.02); }
+
+.btn-label{ background:#ffc107; color:#000; }
+.btn-label:hover{ background:#e0a800; transform:scale(1.02); }
+
+.btn-report{ background:#0d6efd; color:white; }
+.btn-report:hover{ background:#084298; transform:scale(1.02); }
+
+.btn-config{ background:#6c757d; color:white; }
+.btn-config:hover{ background:#495057; transform:scale(1.02); }
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- HEADER -->
+<div class="header text-center">
+    <h2>👔 Painel Gerente</h2>
+    <p>Gestão operacional completa — vendas, stock, equipa e relatórios</p>
+</div>
+
+<!-- ACTION GRID -->
+<div class="row mt-4 g-3">
+
+    <!-- CAIXA -->
+    <div class="col-md-3">
+        <div class="action-box">
+            <div class="action-title">🛒 Caixa</div>
+
+            <a href="venda.php" class="btn-action btn-cash">
+                Abrir Caixa
+            </a>
+
+            <a href="caixa.php" class="btn-action btn-cash">
+                Caixa Diário
+            </a>
+        </div>
+    </div>
+
+    <!-- LABELS -->
+    <div class="col-md-3">
+        <div class="action-box">
+            <div class="action-title">🏷️ Labels</div>
+
+            <a href="label_generator.php" class="btn-action btn-label">
+                Gerar Etiquetas
+            </a>
+        </div>
+    </div>
+
+    <!-- RELATÓRIOS -->
+    <div class="col-md-3">
+        <div class="action-box">
+            <div class="action-title">📊 Relatórios</div>
+
+            <a href="relatorio_vendas.php" class="btn-action btn-report">Vendas</a>
+            <a href="relatorio_estoque.php" class="btn-action btn-report">Stock</a>
+            <a href="fecho_dia.php" class="btn-action btn-report">Fecho do Dia</a>
+        </div>
+    </div>
+
+    <!-- SISTEMA -->
+    <div class="col-md-3">
+        <div class="action-box">
+            <div class="action-title">⚙️ Sistema</div>
+
+            <a href="cadastrar_produto.php" class="btn-action btn-config">Produtos</a>
+            <a href="cadastrar_usuario.php" class="btn-action btn-config">Utilizadores</a>
+            <a href="configuracoes/configuracoes.php" class="btn-action btn-config">Configurações</a>
+        </div>
+    </div>
+
+</div>
+
+<!-- LOGOUT -->
+<div class="text-center mt-4">
+    <a href="logout.php" class="btn btn-danger btn-lg px-5">
+        Terminar Sessão
+    </a>
+</div>
+
+</div>
 
 </body>
 </html>

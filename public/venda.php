@@ -1,13 +1,15 @@
 <?php
-session_start();
-require_once __DIR__ . '/configuracoes/logMiddleware.php';
-
-
-
-// Mostrar erros para desenvolvimento (remova em produção)
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+
+session_start();
+require_once __DIR__ . '/configuracoes/logMiddleware.php';
+
+require_once "../middleware/auth.php";
+
+requireRole(['admin','gerente','caixa']);
+
 
 use Controller\VendaController;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -132,27 +134,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_enviar'])) 
 }
 
 // --- FINALIZAR VENDA NORMAL (SEM EMAIL) ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_venda'])) {
-    header('Content-Type: application/json');
 
-    $valorPago = floatval($_POST['valor_pago'] ?? 0);
-    $metodoPagamento = trim($_POST['metodo_pagamento'] ?? '');
-
-    $resultado = $vendaController->finalizarVenda($valorPago, $metodoPagamento);
-
-    if ($resultado['success'] && isset($resultado['pdfPath']) && $resultado['pdfPath']) {
-        $_SESSION['numero_recibo'] = $resultado['venda_id'];
-        unset($_SESSION['carrinho']);
-    }
-
-    echo json_encode($resultado);
-    exit;
-}
 
 // --- PROCESSAR OUTRAS AÇÕES (ADICIONAR PRODUTO, ETC) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $vendaController->processarRequisicao();
-    exit;
+
+    if (isset($_POST['finalizar_venda'])) {
+        // deixa o controller tratar JSON
+        $vendaController->processarRequisicao();
+        exit;
+    }
+
+    if (isset($_POST['adicionar']) || isset($_POST['remover_produto'])) {
+        $vendaController->processarRequisicao();
+        exit;
+    }
 }
 
 // --- PREPARAR DADOS PARA EXIBIÇÃO DA PÁGINA ---

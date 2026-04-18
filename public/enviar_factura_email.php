@@ -2,6 +2,11 @@
 require_once '../config/database.php';
 // Inclua PHPMailer ou outra biblioteca aqui
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+$pdo = Database::conectar();
+
 $factura_id = $_GET['factura_id'] ?? null;
 
 if (!$factura_id) {

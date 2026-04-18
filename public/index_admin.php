@@ -1,228 +1,549 @@
 <?php
 
+session_start();
 
-if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
-    // Apenas atualiza o último acesso (opcional, pode até remover se não precisar)
+require_once __DIR__ . '/../config/database.php';
+require_once "../middleware/auth.php";
+
+requireRole(['admin']);
+
+$pdo = Database::conectar();
+
+$erro = '';
+$mensagem = '';
+
+/* =========================
+   🔐 RESET ADMIN CONTROLADO
+========================= */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'admin_reset') {
+
+    if (!isset($_SESSION['usuario_id']) || !in_array($_SESSION['nivel_acesso'], ['admin', 'gerente'])) {
+        die("Acesso negado.");
+    }
+
+    $identificador  = trim($_POST['identificador'] ?? '');
+    $admin_password = $_POST['admin_password'] ?? '';
+
+    // 🔍 Buscar admin logado
+    $stmt = $pdo->prepare("SELECT senha FROM usuarios WHERE id = ?");
+    $stmt->execute([$_SESSION['usuario_id']]);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$admin || !password_verify($admin_password, $admin['senha'])) {
+        $erro = "Senha de administrador incorreta.";
+    } else {
+
+        // 🔍 Buscar usuário alvo
+        $stmt = $pdo->prepare("
+            SELECT id, nome, email 
+            FROM usuarios 
+            WHERE email = ? OR nome = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$identificador, $identificador]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            $erro = "Usuário não encontrado.";
+        } else {
+
+            // 🔐 Gerar nova senha segura
+            $novaSenha = bin2hex(random_bytes(4));
+            $hash = password_hash($novaSenha, PASSWORD_DEFAULT);
+
+            $stmt = $pdo->prepare("UPDATE usuarios SET senha = ? WHERE id = ?");
+            $stmt->execute([$hash, $user['id']]);
+
+            $mensagem = "Nova senha gerada para {$user['nome']}: <strong>$novaSenha</strong>";
+        }
+    }
+}
+
+/* =========================
+   ⏱ CONTROLE DE SESSÃO
+========================= */
+if (isset($_SESSION['usuario_id'])) {
+
+    $tempoLimite = 1800; // 30 minutos
+
+    if (isset($_SESSION['ultimo_acesso']) && (time() - $_SESSION['ultimo_acesso']) > $tempoLimite) {
+        session_unset();
+        session_destroy();
+        header("Location: login.php?expirado=1");
+        exit;
+    }
+
     $_SESSION['ultimo_acesso'] = time();
 }
 
-// Inicia sessão
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Idioma atual
+/* =========================
+   🌐 IDIOMA
+========================= */
 $idioma = $_SESSION['lang'] ?? 'pt';
+require_once __DIR__ . '/../config/lang.php';
 
-include '../src/Template/header.php';
-require_once __DIR__ . '/../config/translate.php';
+/* =========================
+   📊 KPIs (ROBUSTO)
+========================= */
 
+try {
 
+    $stmt = $pdo->query("
+        SELECT
+            (SELECT IFNULL(SUM(total),0) FROM vendas WHERE DATE(data_venda) = CURDATE()) AS vendasHoje,
+            (SELECT COUNT(*) FROM produtos) AS totalProdutos,
+            (SELECT COUNT(*) FROM produtos WHERE stock <= 5) AS stockBaixo,
+            (SELECT COUNT(*) FROM usuarios) AS totalUsuarios
+    ");
 
+    $kpis = $stmt->fetch(PDO::FETCH_ASSOC) ?? [];
+
+    $vendasHoje    = $kpis['vendasHoje']    ?? 0;
+    $totalProdutos = $kpis['totalProdutos'] ?? 0;
+    $stockBaixo    = $kpis['stockBaixo']    ?? 0;
+    $totalUsuarios = $kpis['totalUsuarios'] ?? 0;
+
+} catch (PDOException $e) {
+
+    // ⚠️ Evita quebrar o sistema em produção
+    $vendasHoje = 0;
+    $totalProdutos = 0;
+    $stockBaixo = 0;
+    $totalUsuarios = 0;
+
+    // Em ambiente dev podes ativar:
+    // echo $e->getMessage();
+}
 ?>
 
-
-
-
 <!DOCTYPE html>
-<html lang="pt-MZ">
+<html lang="pt">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Painel Admin - Mambo System 95</title>
-  <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
-  <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
-  <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
-  <link href="http://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+<meta charset="UTF-8">
+<title>Mambo System 95 - Admin</title>
+
+
+<!-- BARRA SUPERIOR CUSTOM (Electron POS) -->
+<div class="top-bar">
+  <button onclick="window.api.minimize()">_</button>
+  <button onclick="window.api.maximize()">[]</button>
+  <button onclick="window.api.close()">X</button>
+</div>
+
+
+<style>
+.top-bar {
+  position: fixed;
+  top: 50px;
+  left: 0;
+  right: 0;
+  height: 40px;
+  
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+}
+
+.top-bar button {
+  width: 35px;
+  height: 30px;
+  border: none;
+  cursor: pointer;
+  color: white;
+  background: #333;
+}
+
+.top-bar button:hover {
+  background: #555;
+}
+
+.top-bar button:last-child {
+  background: red;
+}
+</style>
+
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f6fa;
+}
+
+/* TOP BAR */
+.navbar {
+    background: #0d6efd;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 60px;
+}
+
+.navbar .brand {
+    font-weight: bold;
+    font-size: 18px;
+}
+
+/* MENU */
+.menu {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.menu-item {
+    position: relative;
+}
+
+.menu-item a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 12px;
+    display: block;
+    border-radius: 6px;
+}
+
+.menu-item a:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+/* DROPDOWN */
+.dropdown {
+    position: absolute;
+    top: 45px;
+    left: 0;
+    background: white;
+    min-width: 220px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 999;
+}
+
+.dropdown a {
+    color: #333;
+    padding: 10px;
+    display: block;
+    border-bottom: 1px solid #eee;
+}
+
+.dropdown a:hover {
+    background: #f2f2f2;
+}
+
+.menu-item:hover .dropdown {
+    display: block;
+}
+
+/* RIGHT */
+.right-menu {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.badge {
+    background: orange;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.logout {
+    background: red;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: white;
+    text-decoration: none;
+}
+</style>
+
 </head>
 
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">🚀 Mambo System 95</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarMain">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-        <!-- Cadastros -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="cadastroDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="fa-solid fa-plus"></i> Cadastros
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="cadastrar_produto.php">Cadastrar Produto</a></li>
-            <li><a class="dropdown-item" href="cadastrar_usuario.php">Cadastrar Usuário</a></li>
-            <li><a class="dropdown-item" href="cadastrar_produto_takeaway.php">Cadastrar Take Away</a></li>
-            <li><a class="dropdown-item" href="ajustar_estoque.php">Ajustar Estoque</a></li>
-            <li><a class="dropdown-item" href="../src/View/recepcao_estoque.view.php" class="nav-link">Recepção de Estoque</a></li>
+<!-- NAVBAR CUSTOM -->
+<div class="navbar">
 
-          </ul>
-        </li>
+    <div class="brand">🚀 Mambo System 95</div>
 
-        <!-- Listagem -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="listagemDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="fa-solid fa-list"></i> Listagem
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="../src/View/listar_usuario.php">Listar Usuarios</a></li>
-            <li><a class="dropdown-item" href="../src/View/listar_produtos.view.php">Produtos</a></li>
-            <li><a class="dropdown-item" href="../src/View/inventario.view.php">Inventário</a></li>
-            <li><a class="dropdown-item" href="listar_takeaway.php">Take Away</a></li>
-          </ul>
-        </li>
+    <div class="menu">
 
-        <!-- Vales -->
-        <li class="nav-item">
-          <a class="nav-link" href="listar_vales.php">
-            <i class="fa-solid fa-ticket"></i> Vales
-          </a>
-        </li>
+        <!-- CADASTROS -->
+        <div class="menu-item">
+            <a href="#">Cadastros ▾</a>
+            <div class="dropdown">
+                <a href="cadastrar_produto.php">Cadastrar Produto</a>
+                <a href="cadastrar_usuario.php">Cadastrar Usuário</a>
+                <a href="cadastrar_produto_takeaway.php">Take Away Produto</a>
+                <a href="ajustar_estoque.php">Ajustar Estoque</a>
+                <a href="../src/View/recepcao_estoque.view.php">Recepção de Estoque</a>
+            </div>
+        </div>
 
-        <!-- Relatórios -->
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" id="relatorioDropdown" role="button" data-bs-toggle="dropdown">
-            <i class="fa-solid fa-chart-line"></i> Relatórios
-          </a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="relatorio_vendas.php">Relatório Vendas</a></li>
-            <li><a class="dropdown-item" href="relatorio_venda_por_venda.php">Relatório Detalhado</a></li>
-            
-        
-            <li><a class="dropdown-item" href="relatorios_teka_away.php">Relatório Take Away</a></li>
-            <li><a class="dropdown-item" href="relatorio_logins.php">Relatório de Logins</a></li>
-            <li><a class="dropdown-item" href="relatorio_estoque.php">Relatório de Estoque</a></li>
-            <li><a class="dropdown-item" href="../src/View/relatorio_recepcao.php">Relatório de Estoque Recebido</a></li>
-           
-          </ul>
-        </li>
+        <!-- LISTAGEM -->
+        <div class="menu-item">
+            <a href="#">Listagem ▾</a>
+            <div class="dropdown">
+                <a href="../src/View/listar_usuario.php">Listar Usuários</a>
+                <a href="../src/View/listar_produtos.view.php">Produtos</a>
+                <a href="../src/View/inventario.view.php">Inventário</a>
+                <a href="listar_takeaway.php">Take Away</a>
+            </div>
+        </div>
 
-        <!-- Venda -->
-        <li class="nav-item">
-          <a class="nav-link" href="venda.php">
-            <i class="fa-solid fa-shopping-cart"></i> Venda
-          </a>
-        </li>
+        <!-- VALES -->
+        <div class="menu-item">
+            <a href="#">Vales ▾</a>
+            <div class="dropdown">
+                <a href="listar_vales.php">Emitir Vales</a>
+                <a href="historico_vales.php">Histórico</a>
+            </div>
+        </div>
 
-        <!-- Take Away -->
-        <li class="nav-item">
-          <a class="nav-link" href="teka_away_menu.php">
-            <i class="fa-solid fa-utensils"></i> Take Away
-          </a>
-        </li>
+        <div class="menu-item">
+            <a href="label_generator.php">🏷️ Label</a>
+        </div>
 
-        <!-- Configurações -->
-        <li class="nav-item">
-          <a class="nav-link" href="configuracoes/configuracoes.php">
-            <i class="fa-solid fa-gear"></i> Configurações
-          </a>
-        </li>
+        <!-- RELATÓRIOS -->
+        <div class="menu-item">
+            <a href="#">Relatórios ▾</a>
+            <div class="dropdown">
+                <a href="relatorio_vendas.php">Vendas</a>
+                <a href="relatorio_venda_por_venda.php">Detalhado</a>
+                <a href="relatorios_teka_away.php">Take Away</a>
+                <a href="relatorio_logins.php">Logins</a>
+                <a href="relatorio_estoque.php">Estoque</a>
+                <a href="../src/View/relatorio_recepcao.php">Recepção Estoque</a>
+            </div>
+        </div>
 
-       <!-- Dropdown de Idioma -->
-        <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown">
-                🌐 <?= __('language'); ?>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="langDropdown">
-                <li>
-                    <a class="dropdown-item <?= $idioma == 'pt' ? 'active' : '' ?>" href="?lang=pt">
-                        🇲🇿 Português
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item <?= $idioma == 'en' ? 'active' : '' ?>" href="?lang=en">
-                        🇬🇧 English
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item <?= $idioma == 'es' ? 'active' : '' ?>" href="?lang=es">
-                        🇪🇸 Español
-                    </a>
-                </li>
-            </ul>
-        </li>
+        <!-- VENDA -->
+        <div class="menu-item">
+            <a href="#">Venda ▾</a>
+            <div class="dropdown">
+                <a href="venda.php">Nova Venda</a>
+                <a href="caixa.php">Caixa</a>
+            </div>
+        </div>
 
-      </ul>
+        <!-- TAKE AWAY -->
+        <div class="menu-item">
+            <a href="#">Take Away ▾</a>
+            <div class="dropdown">
+                <a href="teka_away_menu.php">Menu Take Away</a>
+                <a href="pedidos.php">Pedidos</a>
+                <a href="entregas.php">Entregas</a>
+            </div>
+        </div>
 
-      <!-- Botão Logout -->
-      <div class="d-flex">
-        <a href="logout.php" class="btn btn-danger btn-lg">
-          <i class="fa-solid fa-right-from-bracket"></i> Terminar Sessão
-        </a>
-      </div>
+        <!-- CONFIGURAÇÕES -->
+        <div class="menu-item">
+            <a href="#">Configurações ▾</a>
+            <div class="dropdown">
+                <a href="configuracoes/configuracoes.php">Sistema</a>
+                <a href="empresa.php">Empresa</a>
+                <a href="backup.php">Backup</a>
+            </div>
+        </div>
+
+        <!-- IDIOMA -->
+        <div class="menu-item">
+            <a href="#">🌐 Idioma ▾</a>
+            <div class="dropdown">
+                <a href="?lang=pt">Português</a>
+                <a href="?lang=en">English</a>
+                <a href="?lang=es">Español</a>
+            </div>
+        </div>
+
+        <!-- SEGURANÇA -->
+        <div class="menu-item">
+            <a href="#">🔒 Segurança ▾</a>
+            <div class="dropdown">
+                <a href="system_scan.php">Logs</a>
+                <a href="permissoes.php">Permissões</a>
+                <a href="alterar_senha.php">Alterar Senha</a>
+            </div>
+        </div>
+
     </div>
-  </div>
-</nav>
 
+    <div class="right-menu">
+        <span class="badge">Admin</span>
+        <a class="logout" href="logout.php">⛔ Sair</a>
+    </div>
 
+</div>
 
-<section class="hero bg-light text-center p-5 mb-5 shadow-sm">
-  <div class="container">
-    <h1 class="display-4 fw-bold text-primary mb-3">Bem-vindo, Admin!</h1>
-    <p class="lead mb-4">Gerencie vendas, estoques, relatórios e muito mais com eficiência e segurança.<br> 
-      O <strong>Mambo System 95</strong> é a força que move o seu negócio para o sucesso.</p>
-   
-  </div>
+<!-- HERO -->
+
+<!-- DASHBOARD HERO MELHORADO -->
+<section style="padding:30px 20px; text-align:center;">
+    <h1 style="margin:0; font-size:32px; color:#0d6efd;">
+        🚀 Bem-vindo ao Mambo System 95
+    </h1>
+    <p style="margin-top:10px; color:#6c757d; font-size:14px; line-height:1.6;">
+    Sistema inteligente de monitorização operacional em tempo real — vendas, stock, utilizadores e métricas estratégicas centralizadas num único painel.
+</p>
 </section>
 
-<main class="container">
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card dashboard-card text-center p-4">
-        <i class="fa-solid fa-cubes fa-3x text-primary mb-3"></i>
-        <h5 class="card-title fw-bold">Gestão de Produtos</h5>
-        <p class="card-text">Cadastre, liste e ajuste seu inventário com poucos cliques.</p>
-        <a href="cadastrar_produto.php" class="btn btn-outline-primary"><i class="fa-solid fa-plus"></i> Novo Produto</a>
-      </div>
+<!-- KPI DASHBOARD -->
+<section style="padding: 20px;">
+
+    <div style="
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        max-width: 1200px;
+        margin: auto;
+    ">
+
+        <div class="kpi-card">
+            💰 <div class="value" id="vendasHoje">MZN 0.00</div>
+            <div class="label">Vendas Hoje</div>
+        </div>
+
+        <div class="kpi-card">
+            💳 <div class="value" id="faturacaoTotal">MZN 0.00</div>
+            <div class="label">Faturação Total</div>
+        </div>
+
+        <div class="kpi-card">
+            📦 <div class="value" id="totalProdutos">0</div>
+            <div class="label">Produtos</div>
+        </div>
+
+        <div class="kpi-card">
+            ⚠️ <div class="value" id="stockBaixo">0</div>
+            <div class="label">Stock Baixo</div>
+        </div>
+
+        <div class="kpi-card">
+            👤 <div class="value" id="totalUsuarios">0</div>
+            <div class="label">Utilizadores</div>
+        </div>
+
     </div>
-    <div class="col-md-4">
-      <div class="card dashboard-card text-center p-4">
-        <i class="fa-solid fa-file-lines fa-3x text-success mb-3"></i>
-        <h5 class="card-title fw-bold">Relatórios Avançados</h5>
-        <p class="card-text">Acompanhe vendas, estoques e desempenho em tempo real.</p>
-        <a href="relatorio_vendas.php" class="btn btn-outline-success"><i class="fa-solid fa-chart-line"></i> Acessar Relatórios</a>
-      </div>
+
+</section>
+
+<!-- ACÇÕES RÁPIDAS -->
+<section style="padding: 0 20px 40px;">
+    <h3 style="text-align:center; margin-bottom:20px;">⚡ Ações Rápidas</h3>
+
+    <div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center;">
+
+        <a class="action-card" href="venda.php">🛒 Nova Venda</a>
+        <a class="action-card" href="cadastrar_produto.php">➕ Novo Produto</a>
+        <a class="action-card" href="ajustar_estoque.php">📊 Ajustar Stock</a>
+        <a class="action-card" href="relatorio_vendas.php">📈 Relatórios</a>
+        <a class="action-card" href="listar_vales.php">🎟️ Vales</a>
+
     </div>
-    <div class="col-md-4">
-      <div class="card dashboard-card text-center p-4">
-        <i class="fa-solid fa-gears fa-3x text-warning mb-3"></i>
-        <h5 class="card-title fw-bold">Configurações</h5>
-        <p class="card-text">Ajuste as preferências do sistema de forma segura.</p>
-        <a href="configuracoes/configuracoes.php" class="btn btn-outline-warning"><i class="fa-solid fa-wrench"></i> Configurar</a>
-      </div>
-    </div>
-  </div>
-</main>
+</section>
 
 <style>
-  body {
-    background: #f8f9fa;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  }
 
-  .hero {
-    border-radius: 20px;
-  }
+/* KPI CARDS */
+.kpi-card {
+    width: 220px;
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    text-align: center;
+    transition: 0.3s;
+}
 
-  .dashboard-card {
-    border-radius: 20px;
-    background: #ffffff;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
-  }
+.kpi-card:hover {
+    transform: translateY(-6px);
+}
 
-  .dashboard-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-  }
+.kpi-card .icon {
+    font-size: 26px;
+    margin-bottom: 8px;
+}
 
-  .btn {
+.kpi-card .value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.kpi-card .label {
+    font-size: 13px;
+    color: #666;
+}
+
+/* ACTION CARDS */
+.action-card {
+    background: #0d6efd;
+    color: white;
+    padding: 12px 18px;
     border-radius: 10px;
+    text-decoration: none;
     font-weight: 600;
-  }
+    transition: 0.3s;
+}
+
+.action-card:hover {
+    background: #084298;
+    transform: scale(1.05);
+}
 </style>
+<!-- MODAL SEGURANÇA -->
+<div id="securityModal" style="display:none;">
+    <form method="POST">
+
+        <input type="hidden" name="action" value="admin_reset">
+
+        <input type="text" name="identificador" placeholder="Email ou Nome" required>
+        <input type="password" name="admin_password" placeholder="Senha Admin" required>
+
+        <button type="submit">Reset Password</button>
+
+        <?php if ($erro) echo "<p style='color:red'>$erro</p>"; ?>
+        <?php if ($mensagem) echo "<p style='color:green'>$mensagem</p>"; ?>
+
+    </form>
+</div>
+
+
+<script>
+async function carregarKPIs() {
+
+    try {
+        const res = await fetch('api_kpis.php');
+        const data = await res.json();
+
+        document.getElementById('vendasHoje').innerText =
+            "MZN " + Number(data.vendasHoje ?? 0).toFixed(2);
+
+        document.getElementById('faturacaoTotal').innerText =
+            "MZN " + Number(data.faturacaoTotal ?? 0).toFixed(2);
+
+        document.getElementById('totalProdutos').innerText =
+            data.totalProdutos ?? 0;
+
+        document.getElementById('stockBaixo').innerText =
+            data.stockBaixo ?? 0;
+
+        document.getElementById('totalUsuarios').innerText =
+            data.totalUsuarios ?? 0;
+
+    } catch (e) {
+        console.error("Erro ao carregar KPIs:", e);
+    }
+}
+
+carregarKPIs();
+setInterval(carregarKPIs, 5000);
+</script>
 
 </body>
 </html>

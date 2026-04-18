@@ -3,7 +3,7 @@
         'name' => 'edsonmambo/mambo_system_95',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'e86a06019883da2549c6489642a3e4c2e92b1839',
+        'reference' => '7bd6b44dc9380005f291e88f9d94095c40761804',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -40,7 +40,7 @@
         'edsonmambo/mambo_system_95' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'e86a06019883da2549c6489642a3e4c2e92b1839',
+            'reference' => '7bd6b44dc9380005f291e88f9d94095c40761804',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

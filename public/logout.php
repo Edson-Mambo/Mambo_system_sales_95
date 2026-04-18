@@ -2,6 +2,13 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';  // Inclui a classe Database
 
+
+session_start();
+session_destroy();
+
+header("Location: login.php");
+exit;
+
 // Verifica se o usuário está logado
 if (isset($_SESSION['usuario_id'])) {
     $usuario_id = $_SESSION['usuario_id'];

@@ -25,19 +25,24 @@ class VendaController
     }
 
     public function processarRequisicao(): void
-    {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
-        if (isset($_POST['finalizar_venda'])) {
-            $this->responderFinalizacaoAjax();
-        } elseif (isset($_POST['adicionar'])) {
-            $this->adicionarProduto();
-            $this->redirecionarComMensagem();
-        } elseif (isset($_POST['remover_produto'])) {
-            $this->removerProduto($_POST['remover_produto']);
-            $this->redirecionarComMensagem();
-        }
+    if (isset($_POST['finalizar_venda'])) {
+        $this->responderFinalizacaoAjax();
+        return;
     }
+
+    if (isset($_POST['adicionar'])) {
+        $this->adicionarProduto();
+        $this->redirecionarComMensagem();
+    }
+
+    if (isset($_POST['remover_produto'])) {
+        $this->removerProduto($_POST['remover_produto']);
+        $this->redirecionarComMensagem();
+    }
+}
 
     private function redirecionarComMensagem(): void
     {
@@ -89,161 +94,162 @@ class VendaController
         }
     }
 
-   private function responderFinalizacaoAjax(): void
+private function responderFinalizacaoAjax(): void
 {
+    header('Content-Type: application/json; charset=utf-8');
+
     $valorPago = (float) ($_POST['valor_pago'] ?? 0);
     $metodoPagamento = $_POST['metodo_pagamento'] ?? 'dinheiro';
 
-    $this->finalizarVenda($valorPago, $metodoPagamento);
+    $resultado = $this->finalizarVenda($valorPago, $metodoPagamento);
 
-    // Nenhum echo, nenhum JSON, nenhum redirecionamento
-    // Só termina o script
+    echo json_encode($resultado);
+    exit;
 }
 
 
     public function finalizarVenda(float $valorPago, string $metodoPagamento): array
-    {
-        $carrinho = $_SESSION['carrinho'] ?? [];
+{
+    $carrinho = $_SESSION['carrinho'] ?? [];
 
-        if (empty($carrinho)) {
-            return ['success' => false, 'mensagem' => 'Carrinho vazio.'];
-        }
+    if (empty($carrinho)) {
+        return ['success' => false, 'mensagem' => 'Carrinho vazio.'];
+    }
 
-        $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $item['quantidade']), 0);
+    $total = array_reduce($carrinho, function ($soma, $item) {
+        return $soma + ($item['preco'] * $item['quantidade']);
+    }, 0);
 
-        if ($valorPago < $total) {
-            return ['success' => false, 'mensagem' => 'Valor pago insuficiente.'];
-        }
+    if ($valorPago < $total) {
+        return ['success' => false, 'mensagem' => 'Valor pago insuficiente.'];
+    }
 
-        try {
-            $this->pdo->beginTransaction();
+    try {
+        $this->pdo->beginTransaction();
 
-            $stmtVenda = $this->pdo->prepare("
-                INSERT INTO vendas 
-                (usuario_id, total, valor_pago, troco, metodo_pagamento, cliente_id, data_venda) 
-                VALUES 
-                (:usuario_id, :total, :valor_pago, :troco, :metodo_pagamento, :cliente_id, NOW())
+        $stmtVenda = $this->pdo->prepare("
+            INSERT INTO vendas 
+            (usuario_id, total, valor_pago, troco, metodo_pagamento, cliente_id, data_venda)
+            VALUES 
+            (:usuario_id, :total, :valor_pago, :troco, :metodo_pagamento, :cliente_id, NOW())
+        ");
+
+        $stmtVenda->execute([
+            ':usuario_id' => $_SESSION['usuario_id'] ?? null,
+            ':total' => $total,
+            ':valor_pago' => $valorPago,
+            ':troco' => $valorPago - $total,
+            ':metodo_pagamento' => $metodoPagamento,
+            ':cliente_id' => $_SESSION['cliente_id'] ?? null
+        ]);
+
+        $vendaId = $this->pdo->lastInsertId();
+
+        foreach ($carrinho as $codigo => $item) {
+
+            $stmtProduto = $this->pdo->prepare("
+                SELECT id FROM produtos WHERE codigo_barra = :codigo LIMIT 1
             ");
-            $stmtVenda->execute([
-                ':usuario_id' => $_SESSION['usuario_id'] ?? null,
-                ':total' => $total,
-                ':valor_pago' => $valorPago,
-                ':troco' => $valorPago - $total,
-                ':metodo_pagamento' => $metodoPagamento,
-                ':cliente_id' => $_SESSION['cliente_id'] ?? null
-            ]);
 
-            $vendaId = $this->pdo->lastInsertId();
+            $stmtProduto->execute([':codigo' => $codigo]);
+            $produto = $stmtProduto->fetch(PDO::FETCH_ASSOC);
 
-            foreach ($carrinho as $codigo => $item) {
-                $stmtProduto = $this->pdo->prepare("SELECT id FROM produtos WHERE codigo_barra = :codigo_barra LIMIT 1");
-                $stmtProduto->execute([':codigo_barra' => $codigo]);
-                $produto = $stmtProduto->fetch(PDO::FETCH_ASSOC);
-
-                if (!$produto) {
-                    throw new PDOException("Produto não encontrado: $codigo");
-                }
-
-                $stmtItem = $this->pdo->prepare("
-                    INSERT INTO produtos_vendidos 
-                    (venda_id, produto_id, quantidade, preco_unitario) 
-                    VALUES 
-                    (:venda_id, :produto_id, :quantidade, :preco)
-                ");
-                $stmtItem->execute([
-                    ':venda_id' => $vendaId,
-                    ':produto_id' => $produto['id'],
-                    ':quantidade' => $item['quantidade'],
-                    ':preco' => $item['preco']
-                ]);
-
-                $stmtEstoque = $this->pdo->prepare("
-                    UPDATE produtos 
-                    SET estoque = estoque - :quantidade 
-                    WHERE id = :id
-                ");
-                $stmtEstoque->execute([
-                    ':quantidade' => $item['quantidade'],
-                    ':id' => $produto['id']
-                ]);
+            if (!$produto) {
+                throw new \Exception("Produto não encontrado: $codigo");
             }
 
-            
+            $stmtItem = $this->pdo->prepare("
+                INSERT INTO produtos_vendidos 
+                (venda_id, produto_id, quantidade, preco_unitario)
+                VALUES (:venda_id, :produto_id, :quantidade, :preco)
+            ");
 
-            $this->pdo->commit();
+            $stmtItem->execute([
+                ':venda_id' => $vendaId,
+                ':produto_id' => $produto['id'],
+                ':quantidade' => $item['quantidade'],
+                ':preco' => $item['preco']
+            ]);
 
-            $_SESSION['numero_recibo'] = $vendaId;
-            $_SESSION['carrinho'] = [];
-            unset($_SESSION['cliente_id']);
-
-            // Imprimir direto na Bixolon
-            $this->imprimirRecibo($vendaId, $carrinho, $total, $valorPago, $metodoPagamento);
-
-            return ['success' => true, 'venda_id' => $vendaId];
-
-        } catch (PDOException $e) {
-            $this->pdo->rollBack();
-            return ['success' => false, 'mensagem' => 'Erro: ' . $e->getMessage()];
-        }
-    }
-
-    public function imprimirRecibo(
-    int $vendaId,
-    array $carrinho,
-    float $total,
-    float $valorPago,
-    string $metodoPagamento
-): void {
-    try {
-        $connector = new WindowsPrintConnector("BIXOLON SRP-350"); // Nome da impressora
-        $printer = new Printer($connector);
-
-        // Nome do caixa logado
-        $nomeCaixa = $_SESSION['usuario_nome'] ?? 'Desconhecido';
-
-        $printer->setJustification(Printer::JUSTIFY_CENTER);
-        $printer->text("--------------------------------\n");
-        $printer->text("Mambo System Sales\n");
-        $printer->text("--------------------------------\n");
-        $printer->text("Mini Merciaria\n");
-        $printer->text("B. Aeroporto, R. 28 de Maio, Nr. 287\n");
-        $printer->text("Tel: +258 84 6187088\n");
-    
-        $printer->text("--------------------------------\n");
-
-        $printer->setJustification(Printer::JUSTIFY_LEFT);
-        $printer->text("Recibo Nº: $vendaId\n");
-        $printer->text("Data: " . date('d/m/Y H:i:s') . "\n");
-        $printer->text("Caixa: $nomeCaixa\n"); // 👈 imprime o nome do caixa
-        $printer->text("--------------------------------\n");
-
-        foreach ($carrinho as $item) {
-            $linha = sprintf(
-                "%-15.15s %3d x %7.2f = %7.2f\n",
-                $item['nome'],
-                $item['quantidade'],
-                $item['preco'],
-                $item['quantidade'] * $item['preco']
-            );
-            $printer->text($linha);
+            $this->pdo->prepare("
+                UPDATE produtos 
+                SET estoque = estoque - :qtd 
+                WHERE id = :id
+            ")->execute([
+                ':qtd' => $item['quantidade'],
+                ':id' => $produto['id']
+            ]);
         }
 
-        $printer->text("--------------------------------\n");
-        $printer->text("Total: MT " . number_format($total, 2, ',', '.') . "\n");
-        $printer->text("Pago: MT " . number_format($valorPago, 2, ',', '.') . "\n");
-        $printer->text("Troco: MT " . number_format($valorPago - $total, 2, ',', '.') . "\n");
-        $printer->text("Metodo: $metodoPagamento\n");
-        $printer->text("--------------------------------\n");
+        $this->pdo->commit();
 
-        $printer->setJustification(Printer::JUSTIFY_CENTER);
-        $printer->text("Obrigado pela preferência, Volte Sempre!\n\n\n");
+        // limpar sessão
+        $_SESSION['numero_recibo'] = $vendaId;
+        $_SESSION['carrinho'] = [];
+        unset($_SESSION['cliente_id']);
 
-        $printer->cut();
-        $printer->close();
+        /**
+         * 🖨️ IMPRESSÃO SEGURA (NUNCA PODE QUEBRAR A VENDA)
+         * Funciona com qualquer impressora instalada no Windows
+         */
+        try {
 
-    } catch (\Exception $e) {
-        error_log("Erro ao imprimir recibo: " . $e->getMessage());
+            $printerName = $_ENV['PRINTER_NAME'] ?? 'GP-C80 Series';
+
+            if (class_exists(\Mike42\Escpos\PrintConnectors\WindowsPrintConnector::class)) {
+
+                $connector = new \Mike42\Escpos\PrintConnectors\WindowsPrintConnector($printerName);
+                $printer = new \Mike42\Escpos\Printer($connector);
+
+                $nomeCaixa = $_SESSION['usuario_nome'] ?? 'Desconhecido';
+
+                $printer->setJustification(\Mike42\Escpos\Printer::JUSTIFY_CENTER);
+                $printer->text("Mambo System Sales\n");
+                $printer->text("--------------------------------\n");
+
+                $printer->setJustification(\Mike42\Escpos\Printer::JUSTIFY_LEFT);
+                $printer->text("Recibo: $vendaId\n");
+                $printer->text("Caixa: $nomeCaixa\n");
+                $printer->text("Data: " . date('d/m/Y H:i:s') . "\n");
+                $printer->text("--------------------------------\n");
+
+                foreach ($carrinho as $item) {
+                    $printer->text(sprintf(
+                        "%-15.15s %3d x %7.2f = %7.2f\n",
+                        $item['nome'],
+                        $item['quantidade'],
+                        $item['preco'],
+                        $item['quantidade'] * $item['preco']
+                    ));
+                }
+
+                $printer->text("--------------------------------\n");
+                $printer->text("Total: MT " . number_format($total, 2, ',', '.') . "\n");
+                $printer->text("Pago: MT " . number_format($valorPago, 2, ',', '.') . "\n");
+                $printer->text("Troco: MT " . number_format($valorPago - $total, 2, ',', '.') . "\n");
+                $printer->text("Metodo: $metodoPagamento\n");
+
+                $printer->cut();
+                $printer->close();
+            }
+
+        } catch (\Throwable $e) {
+            // 🔴 NUNCA quebra venda
+            error_log("Erro impressão: " . $e->getMessage());
+        }
+
+        return [
+            'success' => true,
+            'venda_id' => $vendaId
+        ];
+
+    } catch (\Throwable $e) {
+        $this->pdo->rollBack();
+
+        return [
+            'success' => false,
+            'mensagem' => $e->getMessage()
+        ];
     }
 }
-
 }

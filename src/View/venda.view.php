@@ -34,6 +34,50 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
   <meta charset="UTF-8" />
   <title>Venda - MamboSystem95</title>
   <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="../bootstrap/bootstrap-5.3.3/js/jquery.min.js" rel="script" />
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+<!-- BARRA SUPERIOR CUSTOM (Electron POS) -->
+<div class="top-bar">
+  <button onclick="window.api.minimize()">_</button>
+  <button onclick="window.api.maximize()">[]</button>
+  <button onclick="window.api.close()">X</button>
+</div>
+
+
+<style>
+.top-bar {
+  position: fixed;
+  top: 50px;
+  left: 0;
+  right: 0;
+  height: 40px;
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+}
+
+.top-bar button {
+  width: 35px;
+  height: 30px;
+  border: none;
+  cursor: pointer;
+  color: white;
+  background: #333333;
+}
+
+.top-bar button:hover {
+  background: #555;
+}
+
+.top-bar button:last-child {
+  background: red;
+}
+</style>
+
   <style>
     #finalizarModal input.form-control {
       font-weight: bold;
@@ -508,7 +552,7 @@ document.getElementById('formEnviarWhatsapp').addEventListener('submit', functio
     numero_whatsapp: numero_whatsapp
   })
 })
-.then(response => response.json())
+.then(response => response.json()) // 
 .then(data => {
   if (data.success) {
     respostaDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
@@ -616,37 +660,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
   
 
-  // --- FINALIZAR VENDA NORMAL ---
   formVenda?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(formVenda);
-    formData.append("finalizar_venda", "1");
+  e.preventDefault();
 
+  const formData = new FormData(formVenda);
+  formData.append("finalizar_venda", "1");
+
+  try {
+    const response = await fetch("venda.php", {
+      method: "POST",
+      body: formData,
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    });
+
+    // 🔥 ler apenas uma vez
+    const text = await response.text();
+    console.log("RAW RESPONSE:", text);
+
+    let data;
     try {
-      const response = await fetch("venda.php", {
-        method: "POST",
-        body: formData,
-        headers: { "X-Requested-With": "XMLHttpRequest" }
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const link = document.createElement("a");
-        link.href = data.pdfPath;
-        link.download = `recibo_venda_${data.venda_id}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        setTimeout(() => location.href = "venda.php", 1000);
-      } else {
-        alert(data.mensagem || "Erro ao finalizar venda.");
-      }
-    } catch (err) {
-      alert("Erro de requisição: " + err.message);
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Resposta não é JSON válido:", text);
+      throw new Error("Resposta inválida do servidor");
     }
-  });
+
+    if (data.success) {
+      const link = document.createElement("a");
+      link.href = data.pdfPath;
+      link.download = `recibo_venda_${data.venda_id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => location.href = "venda.php", 1000);
+    } else {
+      alert(data.mensagem || "Erro ao finalizar venda.");
+    }
+
+  } catch (err) {
+    alert("Erro de requisição: " + err.message);
+  }
+});
 
   // --- FINALIZAR VENDA POR EMAIL ---
   formEmail?.addEventListener("submit", async (e) => {
