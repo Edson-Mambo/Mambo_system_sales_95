@@ -137,7 +137,7 @@ if (isset($_POST['reset_password'])) {
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<title>ERP Login</title>
+<title>Mambo System 95</title>
 
 <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
