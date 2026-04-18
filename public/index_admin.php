@@ -279,7 +279,7 @@ body {
             <div class="dropdown">
                 <a href="cadastrar_produto.php">Cadastrar Produto</a>
                 <a href="cadastrar_usuario.php">Cadastrar Usuário</a>
-                <a href="cadastrar_produto_takeaway.php">Take Away Produto</a>
+                 <!-- <a href="cadastrar_produto_takeaway.php">Take Away Produto</a>-->
                 <a href="ajustar_estoque.php">Ajustar Estoque</a>
                 <a href="../src/View/recepcao_estoque.view.php">Recepção de Estoque</a>
             </div>
@@ -292,18 +292,18 @@ body {
                 <a href="../src/View/listar_usuario.php">Listar Usuários</a>
                 <a href="../src/View/listar_produtos.view.php">Produtos</a>
                 <a href="../src/View/inventario.view.php">Inventário</a>
-                <a href="listar_takeaway.php">Take Away</a>
+                  <!-- <a href="listar_takeaway.php">Take Away</a>-->
             </div>
         </div>
 
         <!-- VALES -->
-        <div class="menu-item">
+        <!--<div class="menu-item">
             <a href="#">Vales ▾</a>
-            <div class="dropdown">
+          <div class="dropdown">
                 <a href="../src/View/view_vale_formulario.php">Emitir Vales</a>
                 <a href="listar_vales.php">Histórico</a>
             </div>
-        </div>
+        </div>-->
 
         <div class="menu-item">
             <a href="label_generator.php">🏷️ Label</a>
@@ -315,7 +315,7 @@ body {
             <div class="dropdown">
                 <a href="relatorio_vendas.php">Vendas</a>
                 <a href="relatorio_venda_por_venda.php">Detalhado</a>
-                <a href="relatorios_teka_away.php">Take Away</a>
+                 <!-- <a href="relatorios_teka_away.php">Take Away</a>-->
                 <a href="relatorio_logins.php">Logins</a>
                 <a href="relatorio_estoque.php">Estoque</a>
                 <a href="../src/View/relatorio_recepcao.php">Recepção Estoque</a>
@@ -327,19 +327,19 @@ body {
             <a href="#">Venda ▾</a>
             <div class="dropdown">
                 <a href="venda.php">Nova Venda</a>
-                <a href="caixa.php">Caixa</a>
+                <!-- <a href="caixa.php">Caixa</a>-->
             </div>
         </div>
 
         <!-- TAKE AWAY -->
-        <div class="menu-item">
+          <!--<div class="menu-item">
             <a href="#">Take Away ▾</a>
             <div class="dropdown">
                 <a href="teka_away_menu.php">Menu Take Away</a>
                 <a href="pedidos.php">Pedidos</a>
                 <a href="entregas.php">Entregas</a>
             </div>
-        </div>
+        </div>-->
 
         <!-- CONFIGURAÇÕES -->
         <div class="menu-item">
@@ -347,7 +347,7 @@ body {
             <div class="dropdown">
                 <a href="configuracoes/configuracoes.php">Sistema</a>
                 <a href="empresa.php">Empresa</a>
-                <a href="backup.php">Backup</a>
+                <!--<a href="backup.php">Backup</a>-->
             </div>
         </div>
 

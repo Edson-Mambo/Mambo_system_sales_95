@@ -39,7 +39,20 @@ $recepcoes = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="card-body p-4">
             <h2 class="mb-4">📦 Relatório de Recepção de Estoque</h2>
 
-            <a href="../../public/index_admin.php" class="btn btn-secondary mb-3">← Voltar ao Painel</a>
+            <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => '../../public/index_admin.php',
+                'supervisor' => '../../public/index_supervisor.php',
+                'gerente' => '../../public/index_gerente.php',
+                default => '../../public/index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
 
             <form class="row g-3 mb-4" method="GET">
                 <div class="col-md-4">

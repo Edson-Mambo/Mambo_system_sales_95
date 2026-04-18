@@ -125,9 +125,13 @@ body {
       <ul class="navbar-nav me-auto">
 
         <li class="nav-item"><a class="nav-link" href="venda.php">Caixa</a></li>
+        <li class="nav-item"><a class="nav-link" href="cadastrar_produto.php">Cadastrar Produto</a></li>
         <li class="nav-item"><a class="nav-link" href="relatorio_vendas.php">Vendas</a></li>
-        <li class="nav-item"><a class="nav-link" href="relatorios_teka_away.php">Take Away</a></li>
+        <li class="nav-item"><a class="nav-link" href="relatorio_venda_por_venda.php">Detalhado</a></li>
         <li class="nav-item"><a class="nav-link" href="relatorio_estoque.php">Stock</a></li>
+        <li class="nav-item"><a class="nav-link" href="relatorio_estoque.php">Estoque</a></li>
+        <li class="nav-item"><a class="nav-link" href="../src/View/relatorio_recepcao.php">Recepção Estoque</a></li>
+        
 
         <!-- BOTÃO LABEL (SEM SUBMENU) -->
         <li class="nav-item">

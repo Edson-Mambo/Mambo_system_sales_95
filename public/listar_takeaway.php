@@ -54,7 +54,20 @@ try {
     <?php endif; ?>
 
     <div class="mt-3">
-        <a href="index_admin.php" class="btn btn-secondary">← Voltar ao Painel</a>
+       <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => 'index_admin.php',
+                'supervisor' => 'index_supervisor.php',
+                'gerente' => 'index_gerente.php',
+                default => 'index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
     </div>
 </div>
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>

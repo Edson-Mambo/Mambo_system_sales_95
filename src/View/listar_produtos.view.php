@@ -225,9 +225,20 @@ $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
     <?php endforeach; ?>
     <!-- Botão voltar -->
     <div class="text-center mt-4">
-        <a href="../../public/index_admin.php" class="btn btn-secondary">
-            ← Voltar ao Painel
-        </a>
+        <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => '../../public/index_admin.php',
+                'supervisor' => '../../public/index_supervisor.php',
+                'gerente' => '../../public/index_gerente.php',
+                default => '../../public/index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
     </div>
   </nav>
 

@@ -13,7 +13,20 @@
         <div class="card-body p-5">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0">Recepção de Estoque</h2>
-                <a href="../../public/index_admin.php" class="btn btn-outline-secondary">← Voltar</a>
+                <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => '../../public/index_admin.php',
+                'supervisor' => '../../public/index_supervisor.php',
+                'gerente' => '../../public/index_gerente.php',
+                default => '../../public/index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
             </div>
 
             <form action="../Controller/processar_recepcao.php" method="post">

@@ -91,7 +91,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <div class="text-center mt-4">
-        <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
+        <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => 'index_admin.php',
+                'supervisor' => 'index_supervisor.php',
+                'gerente' => 'index_gerente.php',
+                default => 'index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
     </div>
 </body>
 </html>

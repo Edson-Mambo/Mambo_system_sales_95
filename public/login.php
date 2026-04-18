@@ -35,7 +35,7 @@ if (isset($_POST['login'])) {
                 exit;
 
             case 'supervisor':
-                header("Location: ../public/dashboard_supervisor.php");
+                header("Location: ../public/index_supervisor.php");
                 exit;
 
             case 'caixa':

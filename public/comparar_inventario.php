@@ -170,7 +170,22 @@ $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?= htmlspecialchars($categoria) ?>
           </a>
         <?php endforeach; ?>
-        <a href="index_admin.php" class="btn btn-outline-secondary btn-voltar">← Voltar ao Painel</a>
+
+        <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
+
+            $voltar = match($nivel) {
+                'admin' => 'index_admin.php',
+                'supervisor' => 'index_supervisor.php',
+                'gerente' => 'index_gerente.php',
+                default => 'index.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
+
       </nav>
     </aside>
 
