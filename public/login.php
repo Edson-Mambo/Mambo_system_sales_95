@@ -155,39 +155,7 @@ if (isset($_POST['reset_password'])) {
 <h4>🔐 Mambo System 95 - LOGIN</h4>
 </div>
 
-<!-- BARRA SUPERIOR ELECTRON -->
-<div class="top-bar">
-  <button onclick="window.api.minimize()">_</button>
-  <button onclick="window.api.maximize()">[]</button>
-  <button onclick="window.api.close()">X</button>
-</div>
 
-<style>
-.top-bar {
-  position: fixed;
-  top: 50px;
-  left: 0;
-  right: 0;
-  height: 40px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 5px;
-  padding: 5px;
-}
-
-.top-bar button {
-  width: 35px;
-  height: 30px;
-  border: none;
-  cursor: pointer;
-  color: white;
-  background: #333;
-}
-
-.top-bar button:hover { background: #555; }
-.top-bar button:last-child { background: red; }
-</style>
 
 <div class="card-body">
 
