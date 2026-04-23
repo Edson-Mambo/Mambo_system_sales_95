@@ -3,30 +3,72 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/../../config/database.php';
 
-$stmt = $pdo->prepare("
-    SELECT v.*, c.nome AS cliente_nome, c.id AS cliente_id
-    FROM vendas v
-    LEFT JOIN clientes c ON v.cliente_id = c.id
-    WHERE v.id = ?
-");
+$pdo = Database::conectar();
 
-//$clienteSelecionado = null;
-//if (isset($_SESSION['cliente_id'])) {
- //   $clienteId = $_SESSION['cliente_id'];
-  ////  $stmt = $pdo->prepare("SELECT * FROM clientes WHERE id = ?");
-   // $stmt->execute([$clienteId]);
-   // $clienteSelecionado = $stmt->fetch(PDO::FETCH_ASSOC);
-//}
+/* =========================
+   CLIENTE SELECIONADO (COMPLETO)
+========================= */
+$clienteSelecionado = [
+    'id' => null,
+    'nome' => 'Cliente Geral',
+    'telefone' => '',
+    'email' => '',
+    'morada' => '',
+    'nuit' => ''
+];
 
-$id_venda = isset($_GET['id_venda']) ? intval($_GET['id_venda']) : null;
+if (!empty($_SESSION['cliente_id'])) {
 
-$venda = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmtCliente = $pdo->prepare("
+        SELECT *
+        FROM clientes
+        WHERE id = ?
+        LIMIT 1
+    ");
 
-$total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $item['quantidade']), 0);
+    $stmtCliente->execute([$_SESSION['cliente_id']]);
+    $cliente = $stmtCliente->fetch(PDO::FETCH_ASSOC);
 
+    if ($cliente) {
 
+        $clienteSelecionado = [
+            'id' => $cliente['id'],
+            'nome' => trim($cliente['nome'] . ' ' . ($cliente['apelido'] ?? '')),
+            'telefone' => $cliente['telefone'] ?? '',
+            'email' => $cliente['email'] ?? '',
+            'morada' => $cliente['morada'] ?? '',
+            'nuit' => $cliente['nuit'] ?? ''
+        ];
+    }
+}
+
+/* =========================
+   VENDA
+========================= */
+$id_venda = isset($_GET['id_venda']) ? intval($_GET['id_venda']) : 0;
+
+$venda = null;
+
+if ($id_venda > 0) {
+    $stmt = $pdo->prepare("SELECT * FROM vendas WHERE id = ?");
+    $stmt->execute([$id_venda]);
+    $venda = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/* =========================
+   CARRINHO
+========================= */
+$carrinho = $carrinho ?? [];
+
+$total = 0;
+
+foreach ($carrinho as $item) {
+    $total += ($item['preco'] ?? 0) * ($item['quantidade'] ?? 0);
+}
 ?>
+
 
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -37,46 +79,7 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
   <link href="../bootstrap/bootstrap-5.3.3/js/jquery.min.js" rel="script" />
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   
-<!-- BARRA SUPERIOR CUSTOM (Electron POS) -->
-<div class="top-bar">
-  <button onclick="window.api.minimize()">_</button>
-  <button onclick="window.api.maximize()">[]</button>
-  <button onclick="window.api.close()">X</button>
-</div>
 
-
-<style>
-.top-bar {
-  position: fixed;
-  top: 50px;
-  left: 0;
-  right: 0;
-  height: 40px;
-
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 5px;
-  padding: 5px;
-}
-
-.top-bar button {
-  width: 35px;
-  height: 30px;
-  border: none;
-  cursor: pointer;
-  color: white;
-  background: #333333;
-}
-
-.top-bar button:hover {
-  background: #555;
-}
-
-.top-bar button:last-child {
-  background: red;
-}
-</style>
 
   <style>
     #finalizarModal input.form-control {
@@ -116,9 +119,9 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
         🔍 Buscar Cliente
       </button>
 
-      <a href="venda_vale.php" class="btn btn-sm btn-outline-secondary">
+      <!--<a href="venda_vale.php" class="btn btn-sm btn-outline-secondary">
         🔁 Ir para Vale
-      </a>
+      </a>-->
 
       <!-- Botões de Fatura e Cotação -->
       <a href="factura_cotacao.php?tipo=factura&venda_id=<?= htmlspecialchars($numero_recibo) ?>"
@@ -130,10 +133,10 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
    class="btn btn-sm btn-outline-success">
    📄 Gerar Cotação
 </a>
-<!-- Botão que abre o modal -->
+<!-- Botão que abre o modal 
 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#enviarReciboModal">
   📲 Enviar Recibo via WhatsApp
-</button>
+</button> -->
 
   <a href="logout.php" class="btn btn-sm btn-outline-danger">
     🔒 Terminar Sessão
@@ -531,6 +534,205 @@ $total = array_reduce($carrinho, fn($soma, $item) => $soma + ($item['preco'] * $
 </div>
 
 <script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const formBuscar = document.getElementById("formBuscarCliente");
+    const inputBuscar = document.getElementById("buscar_cliente_input");
+    const resultado = document.getElementById("resultado_busca_cliente");
+
+    const clienteTexto = document.getElementById("clienteSelecionadoTexto");
+    const clienteIdInput = document.getElementById("clienteSelecionadoId");
+
+    /* =========================
+       BUSCAR CLIENTE
+    ========================= */
+    if (formBuscar) {
+        formBuscar.addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            const termo = inputBuscar.value.trim();
+
+            if (termo.length < 2) {
+                resultado.innerHTML = "<p class='text-danger'>Digite pelo menos 2 caracteres</p>";
+                return;
+            }
+
+            fetch("../public/buscar_cliente_ajax.php?q=" + encodeURIComponent(termo))
+                .then(async res => {
+
+                    const text = await res.text();
+
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error("RESPOSTA INVÁLIDA DO PHP:", text);
+                        throw new Error("Resposta não é JSON válido");
+                    }
+
+                })
+                .then(data => {
+
+                    if (!Array.isArray(data)) {
+                        throw new Error("Resposta inválida do servidor");
+                    }
+
+                    if (data.length === 0) {
+                        resultado.innerHTML = "<p class='text-muted'>Nenhum cliente encontrado</p>";
+                        return;
+                    }
+
+                    let html = "<div class='list-group'>";
+
+                    data.forEach(cliente => {
+                        html += `
+                            <button type="button"
+                                class="list-group-item list-group-item-action selecionar-cliente"
+                                data-id="${cliente.id}"
+                                data-nome="${cliente.nome} ${cliente.apelido ?? ''}">
+
+                                <strong>${cliente.nome} ${cliente.apelido ?? ''}</strong><br>
+                                📞 ${cliente.telefone}
+                            </button>
+                        `;
+                    });
+
+                    html += "</div>";
+
+                    resultado.innerHTML = html;
+
+                    ativarSelecaoCliente();
+                })
+                .catch(err => {
+                    console.error(err);
+                    resultado.innerHTML = "<p class='text-danger'>Erro ao buscar clientes</p>";
+                });
+        });
+    }
+
+    /* =========================
+       SELECIONAR CLIENTE
+    ========================= */
+   function ativarSelecaoCliente() {
+
+    document.querySelectorAll(".selecionar-cliente").forEach(btn => {
+
+        // evita duplicar listeners
+        btn.replaceWith(btn.cloneNode(true));
+    });
+
+    document.querySelectorAll(".selecionar-cliente").forEach(btn => {
+
+        btn.addEventListener("click", async function () {
+
+            const id = this.dataset.id;
+            const nome = this.dataset.nome;
+
+            // bloqueia clique imediatamente
+            this.style.pointerEvents = "none";
+
+            try {
+
+                const res = await fetch("../public/buscar_cliente_ajax.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: "cliente_id=" + encodeURIComponent(id)
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+
+                    clienteTexto.innerText = nome;
+                    clienteIdInput.value = id;
+
+                    const modalEl = document.getElementById("modalBuscarCliente");
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.hide();
+
+                    // garante limpeza do backdrop
+                    setTimeout(() => {
+                        document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
+                        document.body.classList.remove("modal-open");
+                        document.body.style.overflow = "";
+                    }, 300);
+
+                } else {
+                    alert(data.message || "Erro ao selecionar cliente");
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert("Erro de conexão ao selecionar cliente");
+            }
+
+            // reativa clique
+            setTimeout(() => {
+                this.style.pointerEvents = "auto";
+            }, 500);
+        });
+    });
+}
+
+    /* =========================
+       CADASTRAR CLIENTE
+    ========================= */
+    const formCadastrar = document.getElementById("formCadastrarCliente");
+
+    if (formCadastrar) {
+        formCadastrar.addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            fetch("../public/cadastrar_cliente_ajax.php", {
+                method: "POST",
+                body: new FormData(formCadastrar)
+            })
+            .then(res => res.json())
+            .then(data => {
+
+                if (data.success) {
+
+                    alert("Cliente cadastrado com sucesso!");
+
+                    formCadastrar.reset();
+
+                    clienteTexto.innerText = data.cliente.nome;
+                    clienteIdInput.value = data.cliente.id;
+
+                    const modalEl = document.getElementById("modalBuscarCliente");
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.hide();
+
+                    // garante remoção de backdrop preso
+                    setTimeout(() => {
+                        document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
+                        document.body.classList.remove("modal-open");
+                        document.body.style.overflow = "";
+                    }, 300);
+
+                    if (modal) modal.hide();
+
+                } else {
+                    alert(data.message || "Erro ao cadastrar cliente");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erro ao cadastrar cliente");
+            });
+        });
+    }
+
+});
+</script>
+
+<!-- Scripts -->
+<script src="../bootstrap/bootstrap-5.3.3/jquery/jquery.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
+
+<script>
 document.getElementById('formEnviarWhatsapp').addEventListener('submit', function(e) {
   e.preventDefault();
 
@@ -570,61 +772,85 @@ document.getElementById('formEnviarWhatsapp').addEventListener('submit', functio
 </script>
 
 
-
-
-<!-- Scripts -->
-<script src="../bootstrap/bootstrap-5.3.3/jquery/jquery.min.js"></script>
-<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
-<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
-
 <script>
+document.getElementById('formEnviarWhatsapp').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const recibo_id = this.recibo_id.value.trim();
+  const numero_whatsapp = this.numero_whatsapp.value.trim();
+  const respostaDiv = document.getElementById('respostaWhatsapp');
+  respostaDiv.innerHTML = '';
+
+  if (!recibo_id || !numero_whatsapp) {
+    respostaDiv.innerHTML = '<div class="alert alert-warning">Por favor, preencha ambos os campos.</div>';
+    return;
+  }
+
+  fetch('enviar_recibo_whatsapp.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      recibo_id: recibo_id,
+      numero_whatsapp: numero_whatsapp
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      respostaDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+    } else {
+      respostaDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+    }
+  })
+  .catch(async (error) => {
+    console.error(error);
+    respostaDiv.innerHTML = '<div class="alert alert-danger">Erro ao enviar a mensagem.</div>';
+  });
+});
+
+
+/* =========================
+   CONTROLO DE METODO PAGAMENTO
+========================= */
 document.addEventListener('DOMContentLoaded', () => {
+
   const metodo = document.getElementById('metodo_pagamento');
   const divAuth = document.getElementById('div_numero_autorizacao');
 
-  metodo.addEventListener('change', () => {
+  metodo?.addEventListener('change', () => {
     const valor = metodo.value;
-    if (valor === 'dinheiro' || valor === '') {
-      divAuth.classList.add('d-none');
-    } else {
-      divAuth.classList.remove('d-none');
-    }
+    divAuth.classList.toggle('d-none', valor === 'dinheiro' || valor === '');
   });
 
   const metodoEmail = document.getElementById('metodo_pagamento_email');
   const divAuthEmail = document.getElementById('div_numero_autorizacao_email');
 
-  metodoEmail.addEventListener('change', () => {
+  metodoEmail?.addEventListener('change', () => {
     const valor = metodoEmail.value;
-    if (valor === 'dinheiro' || valor === '') {
-      divAuthEmail.classList.add('d-none');
-    } else {
-      divAuthEmail.classList.remove('d-none');
-    }
+    divAuthEmail.classList.toggle('d-none', valor === 'dinheiro' || valor === '');
   });
 });
-</script>
 
 
-<script>
+/* =========================
+   FINALIZAÇÃO DE VENDA + PDF (CORRIGIDO)
+========================= */
 document.addEventListener("DOMContentLoaded", () => {
+
   const totalOriginal = <?= $total ?>;
 
-  // --- ELEMENTOS DO MODAL DE VENDA NORMAL ---
   const formVenda = document.getElementById("formFinalizarVenda");
+  const formEmail = document.getElementById("formFinalizarEmail");
+
   const valorPagoVendaInput = document.getElementById("valor_pago");
   const trocoVendaInput = document.getElementById("troco");
 
-  // --- ELEMENTOS DO MODAL DE EMAIL ---
-  const formEmail = document.getElementById("formFinalizarEmail");
   const valorPagoEmailInput = document.getElementById("valor_pago_email");
   const trocoEmailInput = document.getElementById("troco_email");
 
-  // --- ELEMENTOS COMUNS ---
   const descontoCheckbox = document.getElementById("desconto_colaborador");
   const totalSpan = document.getElementById("total_valor");
 
-  // --- FORMATAÇÃO ---
   function formatarMT(valor) {
     return "MT " + valor.toFixed(2).replace(".", ",");
   }
@@ -633,23 +859,18 @@ document.addEventListener("DOMContentLoaded", () => {
     return descontoCheckbox?.checked ? totalOriginal * 0.9 : totalOriginal;
   }
 
-  // --- ATUALIZAÇÃO DO TOTAL E TROCO ---
   function atualizarTotais() {
     const total = obterTotalComDesconto();
-    totalSpan.textContent = formatarMT(total);
+    if (totalSpan) totalSpan.textContent = formatarMT(total);
 
-    // Troco da venda normal
     if (valorPagoVendaInput && trocoVendaInput) {
-      const pagoVenda = parseFloat(valorPagoVendaInput.value) || 0;
-      const trocoVenda = Math.max(pagoVenda - total, 0);
-      trocoVendaInput.value = formatarMT(trocoVenda);
+      const pago = parseFloat(valorPagoVendaInput.value) || 0;
+      trocoVendaInput.value = formatarMT(Math.max(pago - total, 0));
     }
 
-    // Troco da venda por email
     if (valorPagoEmailInput && trocoEmailInput) {
-      const pagoEmail = parseFloat(valorPagoEmailInput.value) || 0;
-      const trocoEmail = Math.max(pagoEmail - total, 0);
-      trocoEmailInput.value = trocoEmail.toFixed(2).replace(".", ",");
+      const pago = parseFloat(valorPagoEmailInput.value) || 0;
+      trocoEmailInput.value = (Math.max(pago - total, 0)).toFixed(2).replace(".", ",");
     }
   }
 
@@ -658,9 +879,11 @@ document.addEventListener("DOMContentLoaded", () => {
   valorPagoEmailInput?.addEventListener("input", atualizarTotais);
   atualizarTotais();
 
-  
 
-  formVenda?.addEventListener("submit", async (e) => {
+  /* =========================
+   FINALIZAR VENDA (CORRIGIDO PDF)
+========================= */
+formVenda?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const formData = new FormData(formVenda);
@@ -673,220 +896,58 @@ document.addEventListener("DOMContentLoaded", () => {
       headers: { "X-Requested-With": "XMLHttpRequest" }
     });
 
-    // 🔥 ler apenas uma vez
-    const text = await response.text();
-    console.log("RAW RESPONSE:", text);
+    const data = await response.json();
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error("Resposta não é JSON válido:", text);
-      throw new Error("Resposta inválida do servidor");
-    }
-
-    if (data.success) {
-      const link = document.createElement("a");
-      link.href = data.pdfPath;
-      link.download = `recibo_venda_${data.venda_id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      setTimeout(() => location.href = "venda.php", 1000);
-    } else {
+    if (!data.success) {
       alert(data.mensagem || "Erro ao finalizar venda.");
-    }
-
-  } catch (err) {
-    alert("Erro de requisição: " + err.message);
-  }
-});
-
-  // --- FINALIZAR VENDA POR EMAIL ---
-  formEmail?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(formEmail);
-    formData.append("finalizar_enviar", "1");
-
-    try {
-      const response = await fetch("venda.php", {
-        method: "POST",
-        body: formData,
-        headers: { "X-Requested-With": "XMLHttpRequest" }
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert("Recibo enviado com sucesso para " + formData.get("email_destino"));
-        setTimeout(() => location.href = "venda.php", 1000);
-      } else {
-        alert(data.mensagem || "Erro ao enviar e finalizar a venda.");
-      }
-    } catch (err) {
-      alert("Erro de requisição: " + err.message);
-    }
-  });
-
-  // --- ATALHO F9 PARA FINALIZAR ---
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "F9") {
-      event.preventDefault();
-      const finalizarModal = new bootstrap.Modal(document.getElementById("finalizarModal"));
-      finalizarModal.show();
-    }
-  });
-
-  // --- FOCO AO ABRIR MODAIS ---
-  document.getElementById("finalizarModal")?.addEventListener("shown.bs.modal", () => {
-    valorPagoVendaInput?.focus();
-  });
-
-  document.getElementById("finalizarEmailModal")?.addEventListener("shown.bs.modal", () => {
-    document.getElementById("email_destino")?.focus();
-  });
-
-  // --- AUTORIZAÇÃO PARA REMOVER PRODUTO ---
-const authModal = new bootstrap.Modal(document.getElementById("modalAutorizacao"));
-const senhaInput = document.getElementById("senha_autorizacao");
-const codigoInput = document.getElementById("codigoProduto");
-const authError = document.getElementById("erro_autorizacao");
-
-document.querySelectorAll(".btn-remover").forEach(btn => {
-  btn.addEventListener("click", () => {
-    authError.classList.add("d-none");
-    senhaInput.value = "";
-    codigoInput.value = btn.dataset.codigo;
-    authModal.show();
-    senhaInput.focus();
-  });
-});
-
-document.getElementById("formAutorizacao")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const senha = senhaInput.value.trim();
-  const codigo = codigoInput.value;
-  if (!senha) return;
-
-  try {
-    const response = await fetch("validar_autorizacao.php", {
-      method: "POST",
-      body: JSON.stringify({ senha, codigo }),
-      headers: { "Content-Type": "application/json" }
-    });
-
-    const result = await response.json();
-
-    if (result.autorizado) {
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = "venda.php";
-
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "remover_produto";
-      input.value = codigo;
-
-      form.appendChild(input);
-      document.body.appendChild(form);
-      form.submit();
-    } else {
-      authError.classList.remove("d-none");
-    }
-  } catch (err) {
-    alert("Erro ao validar senha: " + err.message);
-  }
-});
-
-
-
-$(document).ready(function() {
-
-  // --- UTIL: Atualiza cliente selecionado em todos os campos ---
-  function setClienteSelecionado(id, nome) {
-    $('#clienteSelecionadoTexto').text(nome);
-    $('#clienteSelecionadoId').val(id);
-    $('#clienteSelecionadoTextoSalvar').text(nome);
-    $('#cliente_id_salvar').val(id);
-    $('#cliente_id_finalizar').val(id);
-  }
-
-  // --- CADASTRAR CLIENTE ---
-  $('#formCadastrarCliente').submit(function(e) {
-    e.preventDefault();
-    const dados = $(this).serialize();
-    $.post('salvar_cliente_ajax.php', dados, function(res) {
-      if (res.success) {
-        alert('Cliente cadastrado!');
-        setClienteSelecionado(res.cliente.id, res.cliente.nome);
-        $('#modalCadastrarCliente').modal('hide');
-        $('#formCadastrarCliente')[0].reset();
-      } else {
-        alert('Erro: ' + res.mensagem);
-      }
-    }, 'json').fail(function(jqXHR, textStatus, errorThrown) {
-      console.error('Erro AJAX:', textStatus, errorThrown);
-      console.error('Resposta do servidor:', jqXHR.responseText);
-      alert('Erro na requisição: ' + textStatus);
-    });
-  });
-
-  // --- BUSCAR CLIENTE ---
-  $('#formBuscarCliente').submit(function(e) {
-    e.preventDefault();
-    const termo = $('#buscar_cliente_input').val().trim();
-    if (termo.length < 2) {
-      alert('Digite pelo menos 2 caracteres para buscar.');
       return;
     }
 
-    $.get('buscar_cliente_ajax.php', { q: termo }, function(res) {
-      if (res.length === 0) {
-        $('#resultado_busca_cliente').html('<p class="text-danger">Nenhum cliente encontrado.</p>');
-      } else {
-        let html = '<ul class="list-group">';
-        res.forEach(cliente => {
-          html += `
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <div>
-                <strong>${cliente.nome}</strong> (${cliente.telefone})
-              </div>
-              <button class="btn btn-sm btn-success selecionar-cliente" data-id="${cliente.id}" data-nome="${cliente.nome}">Selecionar</button>
-            </li>
-          `;
-        });
-        html += '</ul>';
-        $('#resultado_busca_cliente').html(html);
-      }
-    }, 'json').fail(function() {
-      $('#resultado_busca_cliente').html('<p class="text-danger">Erro na requisição.</p>');
-    });
-  });
+    if (!data.venda_id) {
+      alert("Venda finalizada mas sem ID.");
+      return;
+    }
 
-  // --- CLICAR EM SELECIONAR CLIENTE ---
-  $('#resultado_busca_cliente').on('click', '.selecionar-cliente', function() {
-    const id = $(this).data('id');
-    const nome = $(this).data('nome');
+    alert("Venda finalizada com sucesso!");
 
-    $.post('buscar_cliente_ajax.php', { cliente_id: id }, function(res) {
-      if (res.success) {
-        setClienteSelecionado(id, nome);
-        $('#modalBuscarCliente').modal('hide');
-        $('#resultado_busca_cliente').empty();
-        $('#buscar_cliente_input').val('');
-      } else {
-        alert('Erro ao selecionar cliente.');
-      }
-    }, 'json').fail(function() {
-      alert('Erro na requisição.');
-    });
-  });
+    const pdfUrl =
+      data.pdf_url ||
+      `gerar_recibo.php.php?venda_id=${data.venda_id}`;
 
+    /* =========================
+       🔥 DOWNLOAD REAL (CORRIGIDO)
+    ========================== */
+
+    // ✔ Método mais confiável no Chrome / Electron
+    const newWindow = window.open(pdfUrl, "_blank");
+
+    // fallback caso popup bloqueado
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === "undefined") {
+      window.location.href = pdfUrl;
+    }
+
+    /* reset sistema */
+    setTimeout(() => {
+      location.href = "venda.php";
+    }, 1200);
+
+  } catch (err) {
+    console.error(err);
+    alert("Erro: " + err.message);
+  }
 });
 
 
+  /* =========================
+     TECLA F9
+  ========================== */
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "F9") {
+      event.preventDefault();
+      const modal = new bootstrap.Modal(document.getElementById("finalizarModal"));
+      modal.show();
+    }
+  });
 
 });
 </script>

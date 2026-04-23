@@ -1,89 +1,195 @@
 <?php
-session_start();
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ob_start();
 
 require_once __DIR__ . '/../config/database.php';
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../config/empresa.php';
+require_once __DIR__ . '/../impressao/ImpressoraFactory.php';
 
-use Mike42\Escpos\Printer;
-use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
-
-$venda_id = $_GET['venda_id'] ?? null;
-if (!$venda_id) {
-    http_response_code(400);
-    exit(json_encode(["success" => false, "erro" => "Venda não encontrada."]));
-}
-
-// Buscar venda
-$stmtVenda = $pdo->prepare("SELECT v.*, u.nome AS nome_usuario 
-    FROM vendas v
-    LEFT JOIN usuarios u ON v.usuario_id = u.id
-    WHERE v.id = ?");
-$stmtVenda->execute([$venda_id]);
-$venda = $stmtVenda->fetch(PDO::FETCH_ASSOC);
-
-if (!$venda) {
-    http_response_code(404);
-    exit(json_encode(["success" => false, "erro" => "Venda não encontrada."]));
-}
-
-// Buscar produtos
-$stmtProdutos = $pdo->prepare("SELECT pv.*, p.nome AS nome_produto 
-    FROM produtos_vendidos pv
-    LEFT JOIN produtos p ON pv.produto_id = p.id
-    WHERE pv.venda_id = ?");
-$stmtProdutos->execute([$venda_id]);
-$produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
+header('Content-Type: application/json; charset=utf-8');
 
 try {
-    // ⚠️ Nome EXATO da impressora no Windows
-    $connector = new WindowsPrintConnector("BIXOLON SRP-350");
-    $printer   = new Printer($connector);
 
-    // --- Cabeçalho ---
-    $printer->setJustification(Printer::JUSTIFY_CENTER);
-    $printer->setEmphasis(true);
-    $printer->text("Mambo System Sales 95\n");
-    $printer->setEmphasis(false);
-    $printer->text("Recibo de Venda\n");
-    $printer->text("Nº " . $venda['numero_recibo'] . "\n");
-    $printer->text(date("d/m/Y H:i:s", strtotime($venda['data_hora'])) . "\n");
-    $printer->text("Operador: " . $venda['nome_usuario'] . "\n");
-    $printer->text("--------------------------------\n");
+    $pdo = Database::conectar();
+    $config = getConfigEmpresa($pdo);
 
-    // --- Produtos ---
-    foreach ($produtos as $item) {
-        $nome     = substr($item['nome_produto'], 0, 20);
-        $qtd      = $item['quantidade'];
-        $subtotal = number_format($item['subtotal'], 2, ',', '.');
-
-        $line = str_pad($nome, 20)
-              . str_pad($qtd, 5, " ", STR_PAD_LEFT)
-              . str_pad($subtotal, 10, " ", STR_PAD_LEFT) . "\n";
-
-        $printer->text($line);
+    $venda_id = $_GET['venda_id'] ?? null;
+    if (!$venda_id) {
+        throw new Exception("Venda inválida");
     }
 
-    $printer->text("--------------------------------\n");
+    /* =========================
+       FUNÇÃO ENDEREÇO EMPRESA
+    ========================= */
+   function enderecoEmpresa($config)
+{
+    $partes = [];
 
-    // --- Totais ---
-    $printer->setJustification(Printer::JUSTIFY_RIGHT);
-    $printer->text("TOTAL: MT " . number_format($venda['total'], 2, ',', '.') . "\n");
-    $printer->text("Recebido: MT " . number_format($venda['valor_recebido'], 2, ',', '.') . "\n");
-    $printer->text("Troco: MT " . number_format($venda['troco'], 2, ',', '.') . "\n");
+    if (!empty($config['rua_avenida'])) {
+        $partes[] = $config['rua_avenida'];
+    }
 
-    // --- Mensagem final ---
-    $printer->feed(2);
+    if (!empty($config['bairro'])) {
+        $partes[] = $config['bairro'];
+    }
+
+    if (!empty($config['cidade'])) {
+        $partes[] = $config['cidade'];
+    }
+
+    if (!empty($config['provincia'])) {
+        $partes[] = $config['provincia'];
+    }
+
+    // fallback para campo antigo
+    if (empty($partes) && !empty($config['endereco'])) {
+        $partes[] = $config['endereco'];
+    }
+
+    return implode(", ", $partes);
+}
+
+    /* =========================
+       VENDA + CLIENTE + OPERADOR
+    ========================= */
+    $stmt = $pdo->prepare("
+        SELECT 
+            v.*,
+
+            c.nome AS cliente_nome,
+            c.apelido AS cliente_apelido,
+            c.telefone AS cliente_telefone,
+            c.email AS cliente_email,
+            c.morada AS cliente_morada,
+            c.nuit AS cliente_nuit,
+
+            u.nome AS operador_nome
+
+        FROM vendas v
+        LEFT JOIN clientes c ON c.id = v.cliente_id
+        LEFT JOIN usuarios u ON u.id = v.usuario_id
+        WHERE v.id = ?
+    ");
+
+    $stmt->execute([$venda_id]);
+    $venda = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$venda) {
+        throw new Exception("Venda não encontrada");
+    }
+
+    /* =========================
+       PRODUTOS
+    ========================= */
+    $stmt = $pdo->prepare("
+        SELECT pv.*, p.nome
+        FROM produtos_vendidos pv
+        JOIN produtos p ON p.id = pv.produto_id
+        WHERE pv.venda_id = ?
+    ");
+    $stmt->execute([$venda_id]);
+    $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$produtos) {
+        throw new Exception("Sem produtos");
+    }
+
+    /* =========================
+       CLIENTE FORMATADO
+    ========================= */
+    $cliente_nome = trim(
+        ($venda['cliente_nome'] ?? '') . ' ' . ($venda['cliente_apelido'] ?? '')
+    );
+
+    if ($cliente_nome === '') {
+        $cliente_nome = "Cliente Geral";
+    }
+
+    $cliente_tel    = $venda['cliente_telefone'] ?? '-';
+    $cliente_email  = $venda['cliente_email'] ?? '-';
+    $cliente_morada = $venda['cliente_morada'] ?? '-';
+    $cliente_nuit   = $venda['cliente_nuit'] ?? '-';
+
+    $operador_nome = $venda['operador_nome'] ?? 'Sistema';
+
+   /* =========================
+   IMPRESSORA
+    ========================= */
+    $printer = ImpressoraFactory::criar($config);
+
     $printer->setJustification(Printer::JUSTIFY_CENTER);
-    $printer->text("Obrigado pela preferência!\n");
+    $printer->setEmphasis(true);
+    $printer->text(($config['nome_empresa'] ?? 'Empresa') . "\n");
+    $printer->setEmphasis(false);
 
-    // --- Corte ---
+    $printer->text(enderecoEmpresa($config) . "\n");
+    $printer->text("Tel: " . ($config['telefone'] ?? '-') . "\n");
+    $printer->text("Email: " . ($config['email_empresa'] ?? '-') . "\n");
+    $printer->text("NUIT: " . ($config['nuit_empresa'] ?? '-') . "\n");
+
+    $printer->text("----------------------\n");
+    $printer->text("RECIBO #$venda_id\n");
+    $printer->text("----------------------\n");
+
+    /* =========================
+       CLIENTE
+    ========================= */
+    $printer->setJustification(Printer::JUSTIFY_LEFT);
+
+    $printer->text("CLIENTE\n");
+    $printer->text("Nome: $cliente_nome\n");
+    $printer->text("Tel: $cliente_tel\n");
+    $printer->text("Email: $cliente_email\n");
+    $printer->text("Morada: $cliente_morada\n");
+    $printer->text("NUIT: $cliente_nuit\n");
+    $printer->text("----------------------\n");
+
+    /* =========================
+       PRODUTOS
+    ========================= */
+    $total = 0;
+
+    foreach ($produtos as $p) {
+
+        $nome = mb_strimwidth($p['nome'], 0, 20, '...');
+        $qtd = (int)$p['quantidade'];
+        $preco = (float)$p['preco_unitario'];
+        $sub = $qtd * $preco;
+
+        $total += $sub;
+
+        $printer->text("$nome\n");
+        $printer->text("Qtd: $qtd | " . number_format($sub, 2, ',', '.') . "\n");
+    }
+
+    $printer->text("----------------------\n");
+
+    /* =========================
+       TOTAL + OPERADOR
+    ========================= */
+    $printer->setEmphasis(true);
+    $printer->text("TOTAL: " . number_format($total, 2, ',', '.') . " MT\n");
+    $printer->setEmphasis(false);
+
+    $printer->text("----------------------\n");
+    $printer->text("OPERADOR: $operador_nome\n");
+    $printer->text("----------------------\n");
+
+    $printer->feed(2);
+    $printer->text($config['mensagem_rodape'] ?? "Obrigado pela compra!");
+    $printer->feed(2);
+
     $printer->cut();
     $printer->close();
 
-    echo json_encode(["success" => true]);
+    echo json_encode([
+        "success" => true,
+        "venda_id" => $venda_id
+    ]);
 
 } catch (Exception $e) {
-    echo json_encode(["success" => false, "erro" => $e->getMessage()]);
+
+    echo json_encode([
+        "success" => false,
+        "erro" => $e->getMessage()
+    ]);
 }

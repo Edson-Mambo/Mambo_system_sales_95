@@ -29,137 +29,432 @@ if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admi
 
 <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 
-
-
-
-
 <style>
-body{
-    background: linear-gradient(to right, #e3f2fd, #f8f9fa);
-    font-family: 'Segoe UI';
+
+/* BASE */
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f6fa;
 }
 
-/* HEADER */
-.header {
-    background: linear-gradient(90deg,#0d6efd,#084298);
-    color:white;
-    padding:25px;
-    border-radius:16px;
-    margin-top:20px;
+/* NAVBAR IGUAL ADMIN */
+.navbar {
+    background: #0d6efd;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 60px;
 }
 
-/* CARD ACTIONS */
-.action-box{
-    background:white;
-    border-radius:16px;
-    padding:20px;
-    box-shadow:0 6px 20px rgba(0,0,0,0.08);
-    height:100%;
+.navbar .brand {
+    font-weight: bold;
+    font-size: 18px;
 }
 
-.action-title{
-    font-weight:700;
-    margin-bottom:15px;
-    color:#0d6efd;
+/* MENU */
+.menu {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
-.btn-action{
-    display:block;
-    padding:12px;
-    border-radius:10px;
-    text-decoration:none;
-    font-weight:600;
-    margin-bottom:10px;
-    transition:.3s;
-    text-align:center;
+.menu-item {
+    position: relative;
 }
 
-.btn-cash{ background:#198754; color:white; }
-.btn-cash:hover{ background:#157347; transform:scale(1.02); }
+.menu-item a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 12px;
+    display: block;
+    border-radius: 6px;
+}
 
-.btn-label{ background:#ffc107; color:#000; }
-.btn-label:hover{ background:#e0a800; transform:scale(1.02); }
+.menu-item a:hover {
+    background: rgba(255,255,255,0.15);
+}
 
-.btn-report{ background:#0d6efd; color:white; }
-.btn-report:hover{ background:#084298; transform:scale(1.02); }
+/* DROPDOWN */
+.dropdown {
+    position: absolute;
+    top: 45px;
+    left: 0;
+    background: white;
+    min-width: 200px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 999;
+}
 
-.btn-config{ background:#6c757d; color:white; }
-.btn-config:hover{ background:#495057; transform:scale(1.02); }
+.dropdown a {
+    color: #333;
+    padding: 10px;
+    display: block;
+    border-bottom: 1px solid #eee;
+}
+
+.dropdown a:hover {
+    background: #f2f2f2;
+}
+
+.menu-item:hover .dropdown {
+    display: block;
+}
+
+/* RIGHT MENU */
+.right-menu {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.badge {
+    background: orange;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.logout {
+    background: red;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: white;
+    text-decoration: none;
+}
+
+/* HERO */
+.hero {
+    padding: 30px 20px;
+    text-align: center;
+}
+
+/* KPI GRID */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+}
+
+.kpi-card {
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    text-align: center;
+    transition: 0.3s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+}
+
+.kpi-value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.kpi-label {
+    font-size: 13px;
+    color: #666;
+}
+
+/* ACTIONS */
+.action-section {
+    padding: 0 20px 40px;
+}
+
+.action-title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.action-grid {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.action-card {
+    background: #0d6efd;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.action-card:hover {
+    background: #084298;
+    transform: scale(1.05);
+}
 
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<!-- NAVBAR  -->
+<div class="navbar">
 
-<!-- HEADER -->
-<div class="header text-center">
-    <h2>👔 Painel Gerente</h2>
-    <p>Gestão operacional completa — vendas, stock, equipa e relatórios</p>
-</div>
+    <div class="brand">🚀 Mambo System 95</div>
 
-<!-- ACTION GRID -->
-<div class="row mt-4 g-3">
+    <div class="menu">
 
-    <!-- CAIXA -->
-    <div class="col-md-3">
-        <div class="action-box">
-            <div class="action-title">🛒 Caixa</div>
-
-            <a href="venda.php" class="btn-action btn-cash">
-                Abrir Caixa
-            </a>
-
-            <a href="caixa.php" class="btn-action btn-cash">
-                Caixa Diário
-            </a>
+        <!-- CADASTROS -->
+        <div class="menu-item">
+            <a href="#">Cadastros ▾</a>
+            <div class="dropdown">
+                <a href="cadastrar_produto.php">Cadastrar Produto</a>
+                <a href="cadastrar_usuario.php">Cadastrar Usuário</a>
+                <a href="../src/View/recepcao_estoque.view.php">Recepção de Estoque</a>
+            </div>
         </div>
+
+        <!-- LISTAGEM -->
+        <div class="menu-item">
+            <a href="#">Listagem ▾</a>
+            <div class="dropdown">
+                <a href="../src/View/listar_usuario.php">Listar Usuários</a>
+                <a href="../src/View/listar_produtos.view.php">Produtos</a>
+            </div>
+        </div>
+
+        <div class="menu-item">
+            <a href="label_generator.php">🏷️ Label</a>
+        </div>
+
+        <!-- RELATÓRIOS -->
+        <div class="menu-item">
+            <a href="#">Relatórios ▾</a>
+            <div class="dropdown">
+                <a href="relatorio_vendas.php">Vendas</a>
+                <a href="relatorio_venda_por_venda.php">Detalhado</a>
+                <a href="relatorio_estoque.php">Estoque</a>
+                <a href="../src/View/relatorio_recepcao.php">Recepção Estoque</a>
+            </div>
+        </div>
+
+        <!-- VENDA -->
+        <div class="menu-item">
+            <a href="#">Venda ▾</a>
+            <div class="dropdown">
+                <a href="venda.php">Nova Venda</a>
+            </div>
+        </div>
+
+        <!-- CONFIGURAÇÕES -->
+        <div class="menu-item">
+            <a href="#">Configurações ▾</a>
+            <div class="dropdown">
+                <a href="configuracoes/configuracoes.php">Sistema</a>
+            </div>
+        </div>
+
+        <!-- IDIOMA -->
+        <div class="menu-item">
+            <a href="#">🌐 Idioma ▾</a>
+            <div class="dropdown">
+                <a href="?lang=pt">Português</a>
+                <a href="?lang=en">English</a>
+                <a href="?lang=es">Español</a>
+            </div>
+        </div>
+
+        <!-- SEGURANÇA -->
+        <div class="menu-item">
+            <a href="#">🔒 Segurança ▾</a>
+            <div class="dropdown">
+                <a href="alterar_senha.php">Alterar Senha</a>
+            </div>
+        </div>
+
     </div>
 
-    <!-- LABELS -->
-    <div class="col-md-3">
-        <div class="action-box">
-            <div class="action-title">🏷️ Labels</div>
-
-            <a href="label_generator.php" class="btn-action btn-label">
-                Gerar Etiquetas
-            </a>
-        </div>
-    </div>
-
-    <!-- RELATÓRIOS -->
-    <div class="col-md-3">
-        <div class="action-box">
-            <div class="action-title">📊 Relatórios</div>
-
-            <a href="relatorio_vendas.php" class="btn-action btn-report">Vendas</a>
-            <a href="relatorio_estoque.php" class="btn-action btn-report">Stock</a>
-            <a href="fecho_dia.php" class="btn-action btn-report">Fecho do Dia</a>
-        </div>
-    </div>
-
-    <!-- SISTEMA -->
-    <div class="col-md-3">
-        <div class="action-box">
-            <div class="action-title">⚙️ Sistema</div>
-
-            <a href="cadastrar_produto.php" class="btn-action btn-config">Produtos</a>
-            <a href="cadastrar_usuario.php" class="btn-action btn-config">Utilizadores</a>
-            <a href="configuracoes/configuracoes.php" class="btn-action btn-config">Configurações</a>
-        </div>
+    <div class="right-menu">
+        <span class="badge">Gerente</span>
+        <a class="logout" href="logout.php">⛔ Sair</a>
     </div>
 
 </div>
 
-<!-- LOGOUT -->
-<div class="text-center mt-4">
-    <a href="logout.php" class="btn btn-danger btn-lg px-5">
-        Terminar Sessão
-    </a>
-</div>
+<!-- HERO -->
+
+<!-- DASHBOARD HERO MELHORADO -->
+<section style="padding:30px 20px; text-align:center;">
+    <h1 style="margin:0; font-size:32px; color:#0d6efd;">
+        🚀 Bem-vindo ao Mambo System 95
+    </h1>
+    <p style="margin-top:10px; color:#6c757d; font-size:14px; line-height:1.6;">
+    Sistema inteligente de monitorização operacional em tempo real — vendas, stock, utilizadores e métricas estratégicas centralizadas num único painel.
+</p>
+</section>
+
+<!-- KPI DASHBOARD -->
+<section style="padding: 20px;">
+
+    <div style="
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        max-width: 1200px;
+        margin: auto;
+    ">
+
+        <div class="kpi-card">
+            💰 <div class="value" id="vendasHoje">MZN 0.00</div>
+            <div class="label">Vendas Hoje</div>
+        </div>
+
+        <div class="kpi-card">
+            💳 <div class="value" id="faturacaoTotal">MZN 0.00</div>
+            <div class="label">Faturação Total</div>
+        </div>
+
+        <div class="kpi-card">
+            📦 <div class="value" id="totalProdutos">0</div>
+            <div class="label">Produtos</div>
+        </div>
+
+        <div class="kpi-card">
+            ⚠️ <div class="value" id="stockBaixo">0</div>
+            <div class="label">Stock Baixo</div>
+        </div>
+
+        <div class="kpi-card">
+            👤 <div class="value" id="totalUsuarios">0</div>
+            <div class="label">Utilizadores</div>
+        </div>
+
+    </div>
+
+</section>
+
+<!-- ACTIONS -->
+<div class="action-section">
+
+    <h3 class="action-title">⚡ Ações Rápidas</h3>
+
+    <div class="action-grid">
+
+        <a class="action-card" href="venda.php">🛒 Caixa</a>
+        <a class="action-card" href="label_generator.php">🏷️ Labels</a>
+        <a class="action-card" href="relatorio_vendas.php">📊 Vendas</a>
+        <a class="action-card" href="relatorio_estoque.php">📦 Stock</a>
+        <a class="action-card" href="fecho_dia.php">📈 Fecho</a>
+
+    </div>
 
 </div>
+
+<style>
+
+/* KPI CARDS */
+.kpi-card {
+    width: 220px;
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    text-align: center;
+    transition: 0.3s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-6px);
+}
+
+.kpi-card .icon {
+    font-size: 26px;
+    margin-bottom: 8px;
+}
+
+.kpi-card .value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.kpi-card .label {
+    font-size: 13px;
+    color: #666;
+}
+
+/* ACTION CARDS */
+.action-card {
+    background: #0d6efd;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.action-card:hover {
+    background: #084298;
+    transform: scale(1.05);
+}
+</style>
+<!-- MODAL SEGURANÇA -->
+<div id="securityModal" style="display:none;">
+    <form method="POST">
+
+        <input type="hidden" name="action" value="admin_reset">
+
+        <input type="text" name="identificador" placeholder="Email ou Nome" required>
+        <input type="password" name="admin_password" placeholder="Senha Admin" required>
+
+        <button type="submit">Reset Password</button>
+
+        <?php if ($erro) echo "<p style='color:red'>$erro</p>"; ?>
+        <?php if ($mensagem) echo "<p style='color:green'>$mensagem</p>"; ?>
+
+    </form>
+</div>
+
+
+<script>
+async function carregarKPIs() {
+
+    try {
+        const res = await fetch('api_kpis.php');
+        const data = await res.json();
+
+        document.getElementById('vendasHoje').innerText =
+            "MZN " + Number(data.vendasHoje ?? 0).toFixed(2);
+
+        document.getElementById('faturacaoTotal').innerText =
+            "MZN " + Number(data.faturacaoTotal ?? 0).toFixed(2);
+
+        document.getElementById('totalProdutos').innerText =
+            data.totalProdutos ?? 0;
+
+        document.getElementById('stockBaixo').innerText =
+            data.stockBaixo ?? 0;
+
+        document.getElementById('totalUsuarios').innerText =
+            data.totalUsuarios ?? 0;
+
+    } catch (e) {
+        console.error("Erro ao carregar KPIs:", e);
+    }
+}
+
+carregarKPIs();
+setInterval(carregarKPIs, 5000);
+</script>
 
 </body>
 </html>
+

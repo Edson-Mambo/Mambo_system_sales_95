@@ -121,6 +121,7 @@ try {
 <head>
 <meta charset="UTF-8">
 <title>Mambo System 95 - Admin</title>
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 
 
 
@@ -307,7 +308,7 @@ body {
             <a href="#">Configurações ▾</a>
             <div class="dropdown">
                 <a href="configuracoes/configuracoes.php">Sistema</a>
-                <a href="empresa.php">Empresa</a>
+                <a href="configuracoes_empresa.php">Info</a>
                 <!--<a href="backup.php">Backup</a>-->
             </div>
         </div>

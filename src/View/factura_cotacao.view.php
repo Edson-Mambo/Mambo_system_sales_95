@@ -149,6 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
     echo "<div class='alert alert-success mt-3'>✅ Fatura gerada com sucesso! PDF salvo.</div>";
     echo "<a href='../public/imprimir_factura.php?factura_id=$factura_id' class='btn btn-success mt-2'>🖨️ Imprimir</a> ";
     echo "<a href='../public/enviar_documento.php?tipo=factura&factura_id=$factura_id' class='btn btn-secondary mt-2'>✉️ Enviar por E-mail</a>";
+
+    
     exit;
 }
 ?>
@@ -262,7 +264,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
   <?php elseif ($venda_id): ?>
     <div class="alert alert-warning text-center">Nenhuma venda encontrada com o recibo nº <strong><?= htmlspecialchars($venda_id) ?></strong>.</div>
   <?php endif; ?>
+<div class="text-center mt-4">
+        <?php
+            $nivel = $_SESSION['usuario_nivel'] ?? '';
 
+            $voltar = match($nivel) {
+                'admin' => '../../public/index_admin.php',
+                'supervisor' => '../../public/index_supervisor.php',
+                'gerente' => '../public/index_gerente.php',
+                default => '../public/venda.php'
+            };
+            ?>
+
+            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                ← Voltar
+            </a>
+    </div>
   <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
   <script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
 </body>
