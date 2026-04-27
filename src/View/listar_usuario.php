@@ -1,89 +1,180 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once '../../config/database.php';
 
 $pdo = Database::conectar();
 
-
-
-
-// Função para listar os usuários
-function listarUsuarios($pdo) {
-    $sql = "SELECT * FROM usuarios";
-    $stmt = $pdo->query($sql);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+/* =========================
+   SEGURANÇA ERP
+========================= */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: ../../public/login.php");
+    exit;
 }
 
-$usuarios = listarUsuarios($pdo);
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+$permitidos = ['admin', 'gerente', 'supervisor'];
+
+if (!in_array($nivel, $permitidos)) {
+    header("Location: ../../public/index.php");
+    exit;
+}
+
+/* =========================
+   USUÁRIOS
+========================= */
+$stmt = $pdo->query("SELECT id, nome, email, nivel FROM usuarios ORDER BY id DESC");
+$usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$totalUsuarios = count($usuarios);
+
+/* =========================
+   VOLTAR ERP
+========================= */
+$rotas = [
+    'admin' => '../../public/index_admin.php',
+    'gerente' => '../../public/index_gerente.php',
+    'supervisor' => '../../public/index_supervisor.php'
+];
+
+$voltar = $rotas[$nivel] ?? '../../public/index.php';
 ?>
 
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8" />
-  <title>Listagem de Usuários | Mambo System</title>
-  <!-- Bootstrap CSS -->
-  <link href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="../../node_modules/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet" />
+<meta charset="UTF-8">
+<title>ERP - Usuários</title>
+
+<link href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+body {
+    background: #eef2f7;
+}
+
+/* HEADER ERP */
+.header {
+    background: #fff;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* CARD */
+.card-erp {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+/* SEARCH */
+#search {
+    max-width: 300px;
+}
+
+/* TABLE */
+.table thead {
+    background: #1f2937;
+    color: #fff;
+}
+</style>
 </head>
+
 <body>
 
-<div class="container mt-5">
-    <h1 class="mb-4">Listagem de Usuários</h1>
+<div class="container mt-4">
 
-    <!-- Tabela de usuários -->
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Email</th>
-                <th>Nível de Acesso</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($usuarios as $usuario) { ?>
+    <!-- HEADER -->
+    <div class="header">
+
+        <div>
+            <h4 class="mb-0">👥 Gestão de Usuários ERP</h4>
+            <small><?= $totalUsuarios ?> usuários cadastrados</small>
+        </div>
+
+        <input type="text" id="search" class="form-control" placeholder="🔎 pesquisar usuário...">
+
+    </div>
+
+    <!-- TABELA -->
+    <div class="card card-erp">
+
+        <table class="table table-hover mb-0" id="tableUsers">
+
+            <thead>
                 <tr>
-                    <td><?= htmlspecialchars($usuario['id']) ?></td>
-                    <td><?= htmlspecialchars($usuario['nome']) ?></td>
-                    <td><?= htmlspecialchars($usuario['email']) ?></td>
-                    <td><?= htmlspecialchars($usuario['nivel']) ?></td>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Nível</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            <?php foreach ($usuarios as $u): ?>
+                <tr>
+                    <td><?= $u['id'] ?></td>
+                    <td><?= htmlspecialchars($u['nome']) ?></td>
+                    <td><?= htmlspecialchars($u['email']) ?></td>
                     <td>
-                        <a href="../../public/editar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-primary btn-sm">
-                            <i class="bi bi-pencil"></i> Editar
+                        <span class="badge bg-primary">
+                            <?= htmlspecialchars($u['nivel']) ?>
+                        </span>
+                    </td>
+                    <td>
+
+                        <a href="../../public/editar_usuario.php?id=<?= $u['id'] ?>"
+                           class="btn btn-sm btn-primary">
+                            ✏️ Editar
                         </a>
-                        <a href="../../public/deletar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-danger btn-sm"
-                           onclick="return confirm('Tem certeza que deseja deletar este usuário?')">
-                            <i class="bi bi-trash"></i> Deletar
+
+                        <a href="../../public/deletar_usuario.php?id=<?= $u['id'] ?>"
+                           class="btn btn-sm btn-danger"
+                           onclick="return confirm('Eliminar este usuário?')">
+                            🗑 Deletar
                         </a>
+
                     </td>
                 </tr>
-            <?php } ?>
-        </tbody>
-    </table>
+            <?php endforeach; ?>
+            </tbody>
 
-    <!-- Botão voltar -->
-    <div class="text-center mt-4">
-        <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
+        </table>
 
-            $voltar = match($nivel) {
-                'admin' => '../../public/index_admin.php',
-                'supervisor' => '../../public/index_supervisor.php',
-                'gerente' => '../../public/index_gerente.php',
-                default => '../../public/index.php'
-            };
-            ?>
-
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
     </div>
+
+    <!-- VOLTAR -->
+    <div class="text-center mt-4">
+        <a href="<?= $voltar ?>" class="btn btn-outline-secondary">
+            ← Voltar ao Painel
+        </a>
+    </div>
+
 </div>
 
-<!-- Bootstrap JS + Popper -->
-<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+<!-- SEARCH SCRIPT -->
+<script>
+document.getElementById("search").addEventListener("input", function () {
+
+    const value = this.value.toLowerCase();
+    const rows = document.querySelectorAll("#tableUsers tbody tr");
+
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(value) ? "" : "none";
+    });
+
+});
+</script>
+
 </body>
 </html>

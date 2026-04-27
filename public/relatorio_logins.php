@@ -75,4 +75,20 @@ try {
 
     <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>
+<script>
+function loadAlerts() {
+    fetch('/api/alerts.php')
+        .then(r => r.json())
+        .then(data => {
+            console.log(data);
+
+            // aqui atualizas UI (badge, modal, toast)
+        });
+}
+
+// cada 10 segundos
+setInterval(loadAlerts, 10000);
+
+loadAlerts();
+</script>
 </html>

@@ -1,11 +1,41 @@
 <?php
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once __DIR__ . '/../../config/database.php';
 
+if (!isset($_SESSION['usuario_id'])) {
+    header("Location: /Mambo_system_sales_95/public/login.php");
+    exit;
+}
+
+if (($_SESSION['nivel_acesso'] ?? '') !== 'caixa') {
+    die("Acesso negado");
+}
+
+$abertura_id = $_SESSION['abertura_id'] ?? null;
+
+if (!$abertura_id) {
+    die("Sessão de caixa inválida");
+}
+
 $pdo = Database::conectar();
+
+$stmt = $pdo->prepare("
+    SELECT id, status
+    FROM abertura_caixa
+    WHERE id = ? 
+    AND status = 'aberto'
+");
+
+$stmt->execute([(int)$abertura_id]);
+
+if (!$stmt->fetch()) {
+    unset($_SESSION['abertura_id']);
+    die("Caixa fechado");
+}
 
 /* =========================
    CLIENTE SELECIONADO (COMPLETO)

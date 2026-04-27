@@ -12,34 +12,35 @@ class ImpressoraFactory
     {
         $tipo = $config['tipo_impressora'] ?? 'windows';
 
-        // WINDOWS
         if ($tipo === 'windows') {
 
-            $nome = $config['nome_impressora'] ?? '';
+            $nome = $config['nome_impressora'] ?? 'GP-C80 Series';
 
-            if (empty($nome)) {
-                // fallback automático (Windows default printer)
-                $nome = trim(shell_exec('wmic printer where default=true get name'));
-                $nome = preg_replace('/Name|\r|\n/', '', $nome);
+            // fallback automático seguro
+            $impressoras = [
+                "BIXOLON SRP-350II",
+                "GP-C80 Series"
+            ];
+
+            if (!in_array($nome, $impressoras)) {
+                $nome = "GP-C80 Series";
             }
-
-            return new Printer(new WindowsPrintConnector($nome));
-        }
-
-        // REDE
-        if ($tipo === 'rede') {
-
-            if (empty($config['ip_impressora'])) {
-                throw new Exception("IP não configurado");
-            }
-
-            $porta = $config['porta_impressora'] ?? 9100;
 
             return new Printer(
-                new NetworkPrintConnector($config['ip_impressora'], $porta)
+                new WindowsPrintConnector($nome)
             );
         }
 
-        throw new Exception("Tipo inválido");
+        if ($tipo === 'rede') {
+
+            return new Printer(
+                new NetworkPrintConnector(
+                    $config['ip_impressora'],
+                    $config['porta_impressora'] ?? 9100
+                )
+            );
+        }
+
+        throw new Exception("Tipo de impressora inválido");
     }
 }

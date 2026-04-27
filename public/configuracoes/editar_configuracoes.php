@@ -4,67 +4,184 @@ session_start();
 require_once '../../config/database.php';
 $pdo = Database::conectar();
 
-// Busca configurações atuais
+/* =========================
+   SEGURANÇA ERP
+========================= */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: ../../public/login.php");
+    exit;
+}
+
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+$permitidos = ['admin', 'gerente'];
+
+if (!in_array($nivel, $permitidos)) {
+    header("Location: ../../public/index.php");
+    exit;
+}
+
+/* =========================
+   CONFIG
+========================= */
 $stmt = $pdo->query("SELECT * FROM configuracoes LIMIT 1");
-$config = $stmt->fetch();
+$config = $stmt->fetch(PDO::FETCH_ASSOC);
+
+$voltar = match($nivel) {
+    'admin' => '../../public/index_admin.php',
+    'gerente' => '../../public/index_gerente.php',
+    default => '../../public/index.php'
+};
 ?>
 
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <title>Editar Configurações</title>
-    <link rel="stylesheet" href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+<meta charset="UTF-8">
+<title>Configurações ERP</title>
+
+<link rel="stylesheet" href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+
+<style>
+body{
+    background:#f4f6f9;
+}
+
+/* HEADER ERP */
+.erp-header{
+    background:#111827;
+    color:#fff;
+    padding:18px 20px;
+    border-radius:10px;
+    margin-bottom:20px;
+}
+
+/* CARD */
+.erp-card{
+    border:0;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.06);
+}
+
+.section-title{
+    font-size:14px;
+    font-weight:600;
+    color:#111827;
+    margin-bottom:15px;
+}
+</style>
+
 </head>
-<body class="container mt-5">
-    <h2>Editar Configurações do Sistema</h2>
-    <form action="config_controller.php" method="POST" class="row g-3">
-        <input type="hidden" name="id" value="<?= $config['id'] ?>">
 
-        <div class="col-md-6">
-            <label for="nome_admin" class="form-label">Nome do Administrador</label>
-            <input type="text" name="nome_admin" id="nome_admin" class="form-control" value="<?= htmlspecialchars($config['nome_admin']) ?>" required>
-        </div>
-        <div class="col-md-6">
-            <label for="email_admin" class="form-label">Email</label>
-            <input type="email" name="email_admin" id="email_admin" class="form-control" value="<?= htmlspecialchars($config['email_admin']) ?>">
-        </div>
-        <div class="col-md-6">
-            <label for="telefone_suporte" class="form-label">Telefone</label>
-            <input type="text" name="telefone_suporte" id="telefone_suporte" class="form-control" value="<?= htmlspecialchars($config['telefone_suporte']) ?>">
-        </div>
-        <div class="col-md-6">
-            <label for="endereco" class="form-label">Endereço</label>
-            <input type="text" name="endereco" id="endereco" class="form-control" value="<?= htmlspecialchars($config['endereco']) ?>">
-        </div>
-        <div class="col-md-6">
-            <label for="horario_atendimento" class="form-label">Horário de Atendimento</label>
-            <input type="text" name="horario_atendimento" id="horario_atendimento" class="form-control" value="<?= htmlspecialchars($config['horario_atendimento']) ?>">
-        </div>
-        <div class="col-md-6">
-            <label for="website" class="form-label">Website</label>
-            <input type="url" name="website" id="website" class="form-control" value="<?= htmlspecialchars($config['website']) ?>">
-        </div>
-        <div class="col-md-4">
-            <label for="ssl_ativado" class="form-label">SSL Ativado</label>
-            <select name="ssl_ativado" id="ssl_ativado" class="form-select">
-                <option value="1" <?= $config['ssl_ativado'] ? 'selected' : '' ?>>Sim</option>
-                <option value="0" <?= !$config['ssl_ativado'] ? 'selected' : '' ?>>Não</option>
-            </select>
-        </div>
-        <div class="col-md-4">
-            <label for="limite_conexoes" class="form-label">Limite de Conexões</label>
-            <input type="number" name="limite_conexoes" id="limite_conexoes" class="form-control" value="<?= htmlspecialchars($config['limite_conexoes']) ?>">
-        </div>
-        <div class="col-md-4">
-            <label for="tempo_expiracao" class="form-label">Expiração Sessão (min)</label>
-            <input type="number" name="tempo_expiracao" id="tempo_expiracao" class="form-control" value="<?= htmlspecialchars($config['tempo_expiracao']) ?>">
+<body>
+
+<div class="container py-4">
+
+    <!-- HEADER -->
+    <div class="erp-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0">⚙️ Configurações do Sistema</h5>
+            <small>Mambo System Sales 95</small>
         </div>
 
-        <div class="col-12">
-            <button type="submit" class="btn btn-success">Salvar</button>
-            <a href="configuracoes.php" class="btn btn-secondary">Cancelar</a>
+        <a href="<?= $voltar ?>" class="btn btn-light btn-sm">
+            ← Voltar
+        </a>
+    </div>
+
+    <!-- FORM -->
+    <div class="card erp-card">
+        <div class="card-body p-4">
+
+            <form action="config_controller.php" method="POST" class="row g-3">
+
+                <input type="hidden" name="id" value="<?= $config['id'] ?>">
+
+                <!-- ADMIN -->
+                <div class="col-12 section-title">👤 Administrador</div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Nome</label>
+                    <input type="text" name="nome_admin" class="form-control"
+                           value="<?= htmlspecialchars($config['nome_admin'] ?? '') ?>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email_admin" class="form-control"
+                           value="<?= htmlspecialchars($config['email_admin'] ?? '') ?>">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Telefone</label>
+                    <input type="text" name="telefone_suporte" class="form-control"
+                           value="<?= htmlspecialchars($config['telefone_suporte'] ?? '') ?>">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Website</label>
+                    <input type="url" name="website" class="form-control"
+                           value="<?= htmlspecialchars($config['website'] ?? '') ?>">
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Endereço</label>
+                    <input type="text" name="endereco" class="form-control"
+                           value="<?= htmlspecialchars($config['endereco'] ?? '') ?>">
+                </div>
+
+                <div class="col-12 section-title mt-4">🛠️ Sistema</div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Horário Atendimento</label>
+                    <input type="text" name="horario_atendimento" class="form-control"
+                           value="<?= htmlspecialchars($config['horario_atendimento'] ?? '') ?>">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">SSL</label>
+                    <select name="ssl_ativado" class="form-select">
+                        <option value="1" <?= !empty($config['ssl_ativado']) ? 'selected' : '' ?>>Ativo</option>
+                        <option value="0" <?= empty($config['ssl_ativado']) ? 'selected' : '' ?>>Inativo</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Modo</label>
+                    <input type="text" name="modo_exibicao" class="form-control"
+                           value="<?= htmlspecialchars($config['modo_exibicao'] ?? '') ?>">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Limite Conexões</label>
+                    <input type="number" name="limite_conexoes" class="form-control"
+                           value="<?= htmlspecialchars($config['limite_conexoes'] ?? 100) ?>">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Expiração Sessão (min)</label>
+                    <input type="number" name="tempo_expiracao" class="form-control"
+                           value="<?= htmlspecialchars($config['tempo_expiracao'] ?? 30) ?>">
+                </div>
+
+                <!-- BOTÕES -->
+                <div class="col-12 mt-4 d-flex gap-2">
+
+                    <button type="submit" class="btn btn-success">
+                        💾 Salvar Alterações
+                    </button>
+
+                    <a href="configuracoes.php" class="btn btn-outline-secondary">
+                        Cancelar
+                    </a>
+
+                </div>
+
+            </form>
+
         </div>
-    </form>
+    </div>
+
+</div>
+
 </body>
 </html>

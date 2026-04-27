@@ -1,15 +1,13 @@
 <?php
 session_start();
 require_once __DIR__ . '/../config/database.php';
-require_once "../middleware/auth.php";
 
 $pdo = Database::conectar();
 $erro = "";
 
-/* ================= LOGIN ================= */
 if (isset($_POST['login'])) {
 
-    $email = $_POST['usuario'] ?? '';
+    $email = trim($_POST['usuario'] ?? '');
     $senha = $_POST['senha'] ?? '';
 
     $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
@@ -20,9 +18,11 @@ if (isset($_POST['login'])) {
 
         session_regenerate_id(true);
 
-        $_SESSION['usuario_id']   = $user['id'];
+        $_SESSION['usuario_id']   = (int)$user['id'];
         $_SESSION['usuario_nome'] = $user['nome'];
         $_SESSION['nivel_acesso'] = $user['nivel'];
+
+        unset($_SESSION['caixa_id'], $_SESSION['abertura_id']);
 
         switch ($user['nivel']) {
 
@@ -35,29 +35,59 @@ if (isset($_POST['login'])) {
                 exit;
 
             case 'supervisor':
-                header("Location: ../public/index_supervisor.php");
+                header("Location: index_supervisor.php");
                 exit;
 
             case 'caixa':
-                header("Location: ../public/venda.php");
+
+                $usuario_id = $user['id'];
+
+                // verifica se já existe caixa aberto
+                $stmt = $pdo->prepare("
+                    SELECT id
+                    FROM abertura_caixa
+                    WHERE usuario_id = ?
+                    AND status = 'aberto'
+                    LIMIT 1
+                ");
+
+                $stmt->execute([$usuario_id]);
+                $abertura = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$abertura) {
+
+                    $stmt = $pdo->prepare("
+                        INSERT INTO abertura_caixa
+                        (usuario_id, valor_inicial, status)
+                        VALUES (?, 0, 'aberto')
+                    ");
+
+                    $stmt->execute([$usuario_id]);
+                    $abertura_id = $pdo->lastInsertId();
+
+                } else {
+                    $abertura_id = $abertura['id'];
+                }
+
+                $_SESSION['abertura_id'] = $abertura_id;
+
+                header("Location: /Mambo_system_sales_95/public/venda.php");
                 exit;
 
             default:
                 header("Location: login.php");
                 exit;
         }
+
+    } else {
+        $erro = "Credenciais inválidas";
     }
-
-    $erro = "Credenciais inválidas";
-}
-
-/* ================= PROTEGER ROTAS ================= */
-if (isset($_SESSION['usuario_id'])) {
-    redirectByRole();
 }
 
 /* ================= ADMIN LOGIN ================= */
 if (isset($_POST['auth_admin'])) {
+
+    header('Content-Type: application/json');
 
     $stmt = $pdo->prepare("
         SELECT * FROM usuarios 
@@ -81,6 +111,8 @@ if (isset($_POST['auth_admin'])) {
 /* ================= LIST USERS ================= */
 if (isset($_POST['list_users'])) {
 
+    header('Content-Type: application/json');
+
     if (!($_SESSION['reset_auth'] ?? false)) {
         echo json_encode(["ok" => false]);
         exit;
@@ -95,6 +127,8 @@ if (isset($_POST['list_users'])) {
 /* ================= RESET PASSWORD ================= */
 if (isset($_POST['reset_password'])) {
 
+    header('Content-Type: application/json');
+
     if (!($_SESSION['reset_auth'] ?? false)) {
         echo json_encode(["ok" => false]);
         exit;
@@ -107,10 +141,7 @@ if (isset($_POST['reset_password'])) {
     if ($mode === "manual") {
 
         if (strlen($nova) < 4) {
-            echo json_encode([
-                "ok" => false,
-                "msg" => "Senha muito curta"
-            ]);
+            echo json_encode(["ok" => false, "msg" => "Senha muito curta"]);
             exit;
         }
 
@@ -154,8 +185,6 @@ if (isset($_POST['reset_password'])) {
 <div class="card-header bg-primary text-white text-center">
 <h4>🔐 Mambo System 95 - LOGIN</h4>
 </div>
-
-
 
 <div class="card-body">
 
@@ -231,9 +260,7 @@ Entrar
 <th>Ação</th>
 </tr>
 </thead>
-
 <tbody id="usersList"></tbody>
-
 </table>
 </div>
 
@@ -288,11 +315,9 @@ admin_pass:$("#admin_pass").val()
 }, function(res){
 
 if(res.ok){
-const modal = bootstrap.Modal.getInstance(document.getElementById('adminModal'));
-modal.hide();
+bootstrap.Modal.getInstance(document.getElementById('adminModal')).hide();
 
-const usersModal = new bootstrap.Modal(document.getElementById('usersModal'));
-usersModal.show();
+new bootstrap.Modal(document.getElementById('usersModal')).show();
 
 loadUsers();
 }else{
@@ -311,7 +336,7 @@ let html="";
 
 users.forEach(u=>{
 
-let badge = "<span class='badge bg-secondary'>User</span>";
+let badge="<span class='badge bg-secondary'>User</span>";
 
 if(u.nivel=="admin") badge="<span class='badge bg-danger'>Admin</span>";
 if(u.nivel=="gerente") badge="<span class='badge bg-warning'>Gerente</span>";
@@ -334,32 +359,25 @@ $("#usersList").html(html);
 },"json");
 }
 
-/* SEARCH */
 $("#searchUser").on("keyup", function(){
 let v=$(this).val().toLowerCase();
-
 $("#usersList tr").filter(function(){
 $(this).toggle($(this).text().toLowerCase().indexOf(v)>-1);
 });
 });
 
-/* OPEN RESET */
 function openReset(id){
 $("#user_id").val(id);
 
-const usersModal = bootstrap.Modal.getInstance(document.getElementById('usersModal'));
-usersModal.hide();
+bootstrap.Modal.getInstance(document.getElementById('usersModal')).hide();
 
-const resetModal = new bootstrap.Modal(document.getElementById('resetModal'));
-resetModal.show();
+new bootstrap.Modal(document.getElementById('resetModal')).show();
 }
 
-/* TOGGLE */
 $("#modo").change(function(){
 $("#manualBox").toggle($(this).val()=="manual");
 });
 
-/* RESET */
 function resetPassword(){
 
 $.post("", {
@@ -371,10 +389,7 @@ nova_senha:$("#nova_senha").val()
 
 if(res.ok){
 alert("Nova senha: "+res.senha);
-
-const modal = bootstrap.Modal.getInstance(document.getElementById('resetModal'));
-modal.hide();
-
+bootstrap.Modal.getInstance(document.getElementById('resetModal')).hide();
 }else{
 alert(res.msg);
 }
@@ -382,21 +397,6 @@ alert(res.msg);
 },"json");
 }
 
-/* ELECTRON CLOSE CONTROL */
-if (window.api?.onConfirmClose) {
-window.api.onConfirmClose(async () => {
-
-  const session = await window.api.checkSession?.();
-
-  if (session?.logged) {
-    alert("Faça logout primeiro.");
-    return;
-  }
-
-  const ok = confirm("Deseja fechar o sistema?");
-  if (ok) window.api.forceClose();
-});
-}
 </script>
 
 </body>

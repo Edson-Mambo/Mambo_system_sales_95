@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-$timeout = 30 * 60;
+
 
 // CONTROLO DE SESSÃO
 if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
@@ -225,12 +225,15 @@ body {
             <a href="#">Listagem ▾</a>
             <div class="dropdown">
                 <a href="../src/View/listar_produtos.view.php">Produtos</a>
+                <a href="relatorio_vendas.php">Vendas</a>
             </div>
         </div>
 
         <div class="menu-item">
             <a href="label_generator.php">🏷️ Label</a>
         </div>
+
+       
 
         <!-- RELATÓRIOS -->
         <div class="menu-item">

@@ -1,17 +1,34 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once '../config/database.php';
-session_start();
 
 $pdo = Database::conectar();
 
-// Categorias disponíveis
+/* SEGURANÇA */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: ../public/login.php");
+    exit;
+}
+
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+$permitidos = ['admin', 'gerente', 'supervisor'];
+
+if (!in_array($nivel, $permitidos)) {
+    header("Location: ../public/index.php");
+    exit;
+}
+
+/* CATEGORIAS */
 $categorias = ['Todos', 'Bebidas', 'Food', 'Limpeza', 'Snacks', 'Congelados', 'Outros'];
 $categoriaSelecionada = $_GET['categoria'] ?? 'Todos';
 
-// Consulta produtos por categoria
+/* PRODUTOS */
 if ($categoriaSelecionada !== 'Todos') {
     $stmt = $pdo->prepare("
-        SELECT p.id, p.nome, p.codigo_barra, p.estoque, p.preco, c.nome AS categoria
+        SELECT p.id, p.nome, p.codigo_barra, p.estoque, c.nome AS categoria
         FROM produtos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         WHERE c.nome = ?
@@ -20,182 +37,172 @@ if ($categoriaSelecionada !== 'Todos') {
     $stmt->execute([$categoriaSelecionada]);
 } else {
     $stmt = $pdo->query("
-        SELECT p.id, p.nome, p.codigo_barra, p.estoque, p.preco, c.nome AS categoria
+        SELECT p.id, p.nome, p.codigo_barra, p.estoque, c.nome AS categoria
         FROM produtos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         ORDER BY c.nome, p.nome
     ");
 }
+
 $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Mensagem
-$mensagem = $_SESSION['mensagem'] ?? '';
-unset($_SESSION['mensagem']);
+$voltar = "../src/View/inventario.view.php";
 ?>
 
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8" />
-  <title>🧮 Inventário Físico - Mambo System</title>
-  <link rel="stylesheet" href="../assets/bootstrap.min.css" />
-  <style>
-    body {
-      background-color: #f4f6f9;
-      margin: 0;
-    }
-    .wrapper {
-      display: flex;
-      min-height: 100vh;
-    }
-    .sidebar {
-      width: 220px;
-      background-color: #343a40;
-      color: #fff;
-      padding: 20px;
-    }
-    .sidebar h3 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: #0d6efd;
-    }
-    .sidebar nav a {
-      display: block;
-      color: #adb5bd;
-      text-decoration: none;
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 6px;
-      font-weight: 600;
-    }
-    .sidebar nav a.active, .sidebar nav a:hover {
-      background-color: #0d6efd;
-      color: #fff;
-    }
-    .content {
-      flex-grow: 1;
-      padding: 30px;
-      background: #fff;
-    }
-    h1 {
-      color: #0d6efd;
-      margin-bottom: 25px;
-    }
-    table thead th {
-      background-color: #343a40;
-      color: #fff;
-      text-align: center;
-      padding: 12px;
-    }
-    table tbody td {
-      text-align: center;
-      padding: 10px;
-      border: 1px solid #dee2e6;
-    }
-    .input-small {
-      max-width: 100px;
-      margin: auto;
-    }
-    @media (max-width: 768px) {
-      .wrapper {
-        flex-direction: column;
-      }
-      .sidebar {
-        width: 100%;
-        display: flex;
-        overflow-x: auto;
-      }
-      .sidebar nav {
-        display: flex;
-        flex-direction: row;
-        gap: 10px;
-      }
-      .sidebar nav a {
-        flex: 1;
-        padding: 10px;
-        text-align: center;
-      }
-      .content {
-        padding: 20px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Inventário Físico</title>
+
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+body {
+    background: #eef2f7;
+}
+
+.page-header {
+    background: #fff;
+    padding: 15px 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.card-erp {
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    background: #1f2937;
+    color: #fff;
+    z-index: 2;
+}
+
+.table tbody tr:hover {
+    background: #f1f5f9;
+}
+
+input[type="number"] {
+    width: 120px;
+}
+</style>
 </head>
+
 <body>
-  <div class="wrapper">
 
-    <aside class="sidebar">
-      <h3>Categorias</h3>
-      <nav>
-        <?php foreach ($categorias as $categoria): ?>
-          <a href="?categoria=<?= urlencode($categoria) ?>"
-             class="<?= $categoria === $categoriaSelecionada ? 'active' : '' ?>">
-            <?= htmlspecialchars($categoria) ?>
-          </a>
-        <?php endforeach; ?>
-      </nav>
-       <a href="index_admin.php" class="btn btn-outline-secondary me-2">← Voltar ao Painel</a>
-    </aside>
+<div class="container-fluid py-3">
 
-    <section class="content">
-     
+<!-- HEADER -->
+<div class="page-header d-flex justify-content-between align-items-center mb-3">
 
-      <!-- Voltar -->
-      <a href="../src/View/inventario.view.php" class="btn btn-outline-secondary mb-3">← Voltar para Visualizar Inventário</a>
-  
-      <button type="submit" class="btn btn-success">💾 Salvar Inventário</button>
+    <div>
+        <h4 class="mb-0">🧮 Inventário Físico</h4>
+        <small class="text-muted">Contagem de stock em tempo real</small>
+    </div>
 
-      <h1>📝 Inventário Físico - <?= htmlspecialchars($categoriaSelecionada) ?>
-    </h1>
+    <a href="<?= $voltar ?>" class="btn btn-outline-secondary btn-sm">
+        ← Voltar
+    </a>
 
-      <?php if (!empty($mensagem)): ?>
-        <div class="alert alert-info"><?= htmlspecialchars($mensagem) ?></div>
-      <?php endif; ?>
+</div>
 
-      <form method="post" action="salvar_inventario.php" novalidate>
-        <div class="table-responsive">
-          <table class="table table-bordered table-hover align-middle">
-            <thead>
-              <tr>
-                <th>Categoria</th>
-                <th>Nome</th>
-                <th>Código</th>
-                <th>Estoque Sistema</th>
-                <th>Quantidade Física</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (!empty($produtos)): ?>
-                <?php foreach ($produtos as $produto): ?>
-                  <tr>
-                    <td><?= htmlspecialchars($produto['categoria']) ?></td>
-                    <td><?= htmlspecialchars($produto['nome']) ?></td>
-                    <td><?= htmlspecialchars($produto['codigo_barra']) ?></td>
-                    <td><?= (int)$produto['estoque'] ?></td>
-                    <td>
-                      <input type="number"
-                             name="produtos[<?= $produto['id'] ?>][quantidade_fisica]"
-                             class="form-control input-small"
-                             min="0"
-                             placeholder="0"
-                             required />
-                      <input type="hidden" name="produtos[<?= $produto['id'] ?>][id]" value="<?= $produto['id'] ?>" />
-                    </td>
-                  </tr>
+<!-- FILTRO -->
+<div class="card card-erp mb-3">
+    <div class="card-body">
+
+        <form method="GET" class="d-flex gap-2 align-items-center">
+
+            <label class="fw-bold">Categoria:</label>
+
+            <select name="categoria" class="form-select form-select-sm" style="width:200px;">
+                <?php foreach ($categorias as $cat): ?>
+                    <option value="<?= $cat ?>" <?= $categoriaSelecionada == $cat ? 'selected' : '' ?>>
+                        <?= $cat ?>
+                    </option>
                 <?php endforeach; ?>
-              <?php else: ?>
-                <tr><td colspan="5" class="text-center text-muted">Nenhum produto encontrado nesta categoria.</td></tr>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
+            </select>
 
-        
-      </form>
-    </section>
-  </div>
+            <button class="btn btn-primary btn-sm">
+                🔎 Filtrar
+            </button>
 
-<script src="../assets/bootstrap.bundle.min.js"></script>
-<script src="../bootstrap/bootstrap-5.3.3/js/jquery-3.7.1.min.js"></script>
+        </form>
+
+    </div>
+</div>
+
+<!-- TABELA -->
+<div class="card card-erp">
+
+<form method="post" action="salvar_inventario.php">
+
+<div class="table-responsive">
+
+<table class="table table-hover align-middle mb-0">
+
+<thead>
+<tr>
+    <th>Categoria</th>
+    <th>Produto</th>
+    <th>Código</th>
+    <th class="text-center">Sistema</th>
+    <th class="text-center">Físico</th>
+</tr>
+</thead>
+
+<tbody>
+
+<?php foreach ($produtos as $p): ?>
+<tr>
+
+    <td><?= htmlspecialchars($p['categoria']) ?></td>
+
+    <td><strong><?= htmlspecialchars($p['nome']) ?></strong></td>
+
+    <td><code><?= htmlspecialchars($p['codigo_barra']) ?></code></td>
+
+    <td class="text-center"><?= (int)$p['estoque'] ?></td>
+
+    <td class="text-center">
+        <input type="number"
+               name="produtos[<?= $p['id'] ?>][quantidade_fisica]"
+               class="form-control form-control-sm"
+               min="0"
+               placeholder="0">
+
+        <input type="hidden"
+               name="produtos[<?= $p['id'] ?>][id]"
+               value="<?= $p['id'] ?>">
+    </td>
+
+</tr>
+<?php endforeach; ?>
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="p-3 d-flex justify-content-end">
+
+    <button class="btn btn-success">
+        💾 Salvar Inventário
+    </button>
+
+</div>
+
+</form>
+
+</div>
+
+</div>
+
 </body>
 </html>

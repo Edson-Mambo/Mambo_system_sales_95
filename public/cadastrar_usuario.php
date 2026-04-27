@@ -1,41 +1,82 @@
 <?php
 require_once '../config/database.php';
 
-session_start();
-include 'helpers/voltar_menu.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
+require_once __DIR__ . '/../helpers/voltar_menu.php';
+
+/* =========================
+   SEGURANÇA (opcional ERP)
+========================= */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+/* =========================
+   VARIÁVEIS
+========================= */
 $mensagem = '';
-$nivels_validos = ['caixa', 'supervisor', 'gerente', 'admin', 'store', 'teka_away'];
 
+$nivels_validos = [
+    'caixa',
+    'supervisor',
+    'gerente',
+    'admin',
+    'store',
+    'teka_away'
+];
+
+/* =========================
+   PROCESSO POST
+========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nome = trim($_POST['nome'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $senha = $_POST['senha'] ?? '';
-    $nivel = $_POST['nivel'] ?? '';
 
-    if (!$nome || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$senha || !in_array($nivel, $nivels_validos)) {
-        $mensagem = "Por favor, preencha todos os campos corretamente e informe um email válido.";
+    $nome   = trim($_POST['nome'] ?? '');
+    $email  = trim($_POST['email'] ?? '');
+    $senha  = $_POST['senha'] ?? '';
+    $nivel  = $_POST['nivel'] ?? '';
+
+    /* VALIDAÇÃO */
+    if (
+        empty($nome) ||
+        empty($email) ||
+        empty($senha) ||
+        !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        !in_array($nivel, $nivels_validos)
+    ) {
+        $mensagem = "❌ Preencha todos os campos corretamente.";
     } else {
+
         try {
             $pdo = Database::conectar();
 
-            // Verificar se já existe usuário com mesmo email
-            $check = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+            /* VERIFICA EMAIL */
+            $check = $pdo->prepare("SELECT id FROM usuarios WHERE email = ?");
             $check->execute([$email]);
 
-            if ($check->rowCount() > 0) {
-                $mensagem = "Erro: Email já está em uso!";
+            if ($check->fetch()) {
+                $mensagem = "⚠️ Email já está em uso.";
             } else {
+
                 $hashSenha = password_hash($senha, PASSWORD_DEFAULT);
-                $stmt = $pdo->prepare("INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)");
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO usuarios (nome, email, senha, nivel)
+                    VALUES (?, ?, ?, ?)
+                ");
+
                 if ($stmt->execute([$nome, $email, $hashSenha, $nivel])) {
-                    $mensagem = "Usuário cadastrado com sucesso!";
+                    $mensagem = "✅ Usuário cadastrado com sucesso!";
                 } else {
-                    $mensagem = "Erro ao inserir usuário.";
+                    $mensagem = "❌ Erro ao cadastrar usuário.";
                 }
             }
+
         } catch (PDOException $e) {
-            $mensagem = "Erro no banco de dados: " . $e->getMessage();
+            $mensagem = "❌ Erro no sistema: " . $e->getMessage();
         }
     }
 }
@@ -44,67 +85,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8" />
-    <title>Cadastrar Usuário</title>
-    <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+<meta charset="UTF-8">
+<title>ERP - Cadastrar Usuário</title>
+
+<link rel="stylesheet" href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+
+<style>
+body {
+    background: #eef2f7;
+}
+
+/* CARD ERP */
+.card-erp {
+    max-width: 600px;
+    margin: auto;
+    margin-top: 40px;
+    padding: 25px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+}
+
+/* HEADER */
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* BOTÃO VOLTAR */
+.voltar {
+    text-align: center;
+    margin-top: 20px;
+}
+</style>
 </head>
-<body class="container py-5">
-    <h2 class="mb-4">Cadastro de Usuário</h2>
 
-    <?php if ($mensagem): ?>
-        <div class="alert <?= strpos($mensagem, 'sucesso') !== false ? 'alert-success' : 'alert-danger' ?>">
-            <?= htmlspecialchars($mensagem) ?>
-        </div>
-    <?php endif; ?>
+<body>
 
-    <form method="POST" action="cadastrar_usuario.php" class="w-50 mx-auto">
+<div class="container">
 
-        <div class="mb-3">
-            <label for="nome" class="form-label">Nome Completo</label>
-            <input type="text" id="nome" name="nome" class="form-control" required />
+    <div class="card-erp">
+
+        <!-- HEADER -->
+        <div class="header">
+            <h3>👤 Cadastro de Usuário</h3>
+            <small>Sistema ERP</small>
         </div>
 
-        <div class="mb-3">
-            <label for="email" class="form-label">Email (Nome de Usuário)</label>
-            <input type="email" id="email" name="email" class="form-control" required />
-        </div>
+        <!-- MENSAGEM -->
+        <?php if ($mensagem): ?>
+            <div class="alert alert-info text-center">
+                <?= htmlspecialchars($mensagem) ?>
+            </div>
+        <?php endif; ?>
 
-        <div class="mb-3">
-            <label for="senha" class="form-label">Senha</label>
-            <input type="password" id="senha" name="senha" class="form-control" required />
-        </div>
+        <!-- FORM -->
+        <form method="POST">
 
-        <div class="mb-3">
-            <label for="nivel" class="form-label">Nível do Usuário</label>
-            <select id="nivel" name="nivel" class="form-select" required>
-                <option value="" disabled selected>Selecione o nível</option>
-                <option value="caixa">Caixa</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="gerente">Gerente</option>
-                <option value="admin">Admin</option>
-                <option value="store">Store</option>
-                <option value="teka_away">Teka Away</option>
-            </select>
-        </div>
+            <div class="mb-3">
+                <label>Nome Completo</label>
+                <input type="text" name="nome" class="form-control" required>
+            </div>
 
-        <button type="submit" class="btn btn-primary">Cadastrar Usuário</button>
-    </form>
+            <div class="mb-3">
+                <label>Email</label>
+                <input type="email" name="email" class="form-control" required>
+            </div>
 
-    <div class="text-center mt-4">
-        <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
+            <div class="mb-3">
+                <label>Senha</label>
+                <input type="password" name="senha" class="form-control" required>
+            </div>
 
-            $voltar = match($nivel) {
-                'admin' => 'index_admin.php',
-                'supervisor' => 'index_supervisor.php',
-                'gerente' => 'index_gerente.php',
-                default => 'index.php'
-            };
-            ?>
+            <div class="mb-3">
+                <label>Nível de Acesso</label>
+                <select name="nivel" class="form-select" required>
+                    <option value="">Selecione</option>
+                    <option value="caixa">Caixa</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="gerente">Gerente</option>
+                    <option value="admin">Admin</option>
+                    <!--<option value="store">Store</option>-->
+                    <!--<option value="teka_away">Teka Away</option>-->
+                </select>
+            </div>
 
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
+            <button class="btn btn-primary w-100">
+                Criar Usuário
+            </button>
+
+        </form>
+
     </div>
+
+    <!-- VOLTAR -->
+    <div class="voltar">
+        <a href="<?= voltarMenu() ?>" class="btn btn-outline-secondary">
+            ← Voltar
+        </a>
+    </div>
+
+</div>
+
 </body>
 </html>

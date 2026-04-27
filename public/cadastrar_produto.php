@@ -1,8 +1,15 @@
 <?php
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../helpers/voltar_menu.php';
+
 require_once '../config/database.php';
 $pdo = Database::conectar();
 $cats = $pdo->query("SELECT * FROM categorias")->fetchAll();
-include 'helpers/voltar_menu.php'; 
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nome = $_POST['nome'] ?? '';
@@ -70,27 +77,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endforeach; ?>
             </select>
         </div>
+        <br>
+        
         <button type="submit" class="btn btn-primary w-100">Cadastrar</button>
-       
-        <div class="text-center mt-4">
-        <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
-
-            $voltar = match($nivel) {
-                'admin' => 'index_admin.php',
-                'supervisor' => 'index_supervisor.php',
-                'gerente' => 'index_gerente.php',
-                default => 'index.php'
-            };
-            ?>
-
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
-        </div>
 
     </form>
-</div>
+    <div class="text-center mt-4">
+        <a href="<?= voltarMenu() ?>" class="btn btn-outline-secondary">
+            ← Voltar
+        </a>
+    </div>
 
 <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>

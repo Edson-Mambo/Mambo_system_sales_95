@@ -1,110 +1,262 @@
 <?php
 session_start();
 require_once '../config/database.php';
-require_once '../src/Controller/VendaController.php';
+
 $pdo = Database::conectar();
 
+$venda_id = $_GET['venda_id'] ?? null;
 
+if (!$venda_id) {
+    die("Venda inválida");
+}
 
-// Buscar todas as vendas
-$stmtVendas = $pdo->prepare("
-    SELECT v.id, v.data_venda, v.total, v.valor_pago, v.troco, v.metodo_pagamento,
-           u.nome AS operador,
-           c.nome AS cliente_nome
+/* =========================
+   CONFIG EMPRESA
+========================= */
+$config = $pdo->query("SELECT * FROM configuracoes_empresa LIMIT 1")
+              ->fetch(PDO::FETCH_ASSOC);
+
+/* =========================
+   VENDA COMPLETA
+========================= */
+$stmt = $pdo->prepare("
+    SELECT 
+        v.*,
+        c.nome AS cliente_nome,
+        c.apelido AS cliente_apelido,
+        c.telefone,
+        c.email,
+        c.morada,
+        c.nuit,
+        u.nome AS operador_nome
     FROM vendas v
-    JOIN usuarios u ON v.usuario_id = u.id
-    LEFT JOIN clientes c ON v.cliente_id = c.id
-    ORDER BY v.data_venda DESC
+    LEFT JOIN clientes c ON c.id = v.cliente_id
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    WHERE v.id = ?
 ");
-$stmtVendas->execute();
-$vendas = $stmtVendas->fetchAll(PDO::FETCH_ASSOC);
+
+$stmt->execute([$venda_id]);
+$venda = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$venda) {
+    die("Venda não encontrada");
+}
+
+/* =========================
+   ITENS
+========================= */
+$stmt = $pdo->prepare("
+    SELECT pv.*, p.nome
+    FROM produtos_vendidos pv
+    JOIN produtos p ON p.id = pv.produto_id
+    WHERE pv.venda_id = ?
+");
+
+$stmt->execute([$venda_id]);
+$itens = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+   CLIENTE
+========================= */
+$cliente = trim(($venda['cliente_nome'] ?? '') . ' ' . ($venda['cliente_apelido'] ?? ''));
+if ($cliente === '') $cliente = 'Cliente Geral';
+
+/* =========================
+   TOTAL REAL
+========================= */
+$total = 0;
+foreach ($itens as $i) {
+    $total += $i['quantidade'] * $i['preco_unitario'];
+}
+
+$valorPago = (float)($venda['valor_pago'] ?? 0);
+$troco = (float)($venda['troco'] ?? ($valorPago - $total));
+
+/* =========================
+   LOGO
+========================= */
+$logo = '';
+if (!empty($config['logo'])) {
+    $path = __DIR__ . '/../public/uploads/' . $config['logo'];
+    if (file_exists($path)) {
+        $type = pathinfo($path, PATHINFO_EXTENSION);
+        $data = base64_encode(file_get_contents($path));
+        $logo = "<img src='data:image/$type;base64,$data' style='max-height:80px;'>";
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <title>Relatório de Vendas</title>
-    <link href="../vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css">
+<meta charset="UTF-8">
+<title>Recibo de Venda</title>
+
+<style>
+body {
+    font-family: Arial;
+    font-size: 13px;
+    color: #000;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: auto;
+}
+
+/* HEADER IGUAL PDF */
+.header {
+    text-align: center;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.empresa {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.sub {
+    font-size: 11px;
+    color: #333;
+}
+
+/* CARD */
+.card {
+    border: 1px solid #000;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+/* FLEX INFO */
+.flex {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* TABELA IGUAL PDF */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+th {
+    background: #000;
+    color: #fff;
+    padding: 8px;
+}
+
+td {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+}
+
+/* TOTAIS */
+.total {
+    text-align: right;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+/* FOOTER */
+.footer {
+    text-align: center;
+    font-size: 11px;
+    margin-top: 20px;
+    border-top: 1px dashed #000;
+    padding-top: 10px;
+}
+
+/* PRINT */
+@media print {
+    button { display:none; }
+}
+</style>
 </head>
-<body class="p-4">
+
+<body onload="window.print()">
+
 <div class="container">
-    <h2 class="mb-4">Relatório de Vendas</h2>
 
-    <?php if(empty($vendas)): ?>
-        <p>Nenhuma venda registrada.</p>
-    <?php else: ?>
-        <?php foreach($vendas as $venda): ?>
-            <div class="card mb-3 shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <strong>Recibo Nº: <?= $venda['id'] ?></strong>
-                    - <?= date('d/m/Y H:i:s', strtotime($venda['data_venda'])) ?>
-                </div>
-                <div class="card-body">
-                    <p><b>Operador:</b> <?= htmlspecialchars($venda['operador']) ?></p>
-                    <p><b>Cliente:</b> <?= htmlspecialchars($venda['cliente_nome'] ?? 'Consumidor Final') ?></p>
-                    <p><b>Método de Pagamento:</b> <?= htmlspecialchars($venda['metodo_pagamento']) ?></p>
+    <!-- HEADER IGUAL PDF -->
+    <div class="header">
+        <?= $logo ?>
+        <div class="empresa"><?= $config['nome_empresa'] ?></div>
+        <div class="sub"><?= $config['endereco'] ?></div>
+        <div class="sub">
+            <?= $config['rua_avenida'] ?>, 
+            <?= $config['bairro'] ?>, 
+            <?= $config['cidade'] ?>, 
+            <?= $config['provincia'] ?>
+        </div>
+        <div class="sub">
+            Tel: <?= $config['telefone'] ?> | <?= $config['email_empresa'] ?>
+        </div>
+        <div class="sub">
+            NUIT: <?= $config['nuit_empresa'] ?>
+        </div>
+    </div>
 
-                    <table class="table table-sm table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Produto</th>
-                                <th>Qtd</th>
-                                <th>Preço Unitário</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php
-                        $stmtProdutos = $pdo->prepare("
-                            SELECT p.nome, pv.quantidade, pv.preco_unitario
-                            FROM produtos_vendidos pv
-                            JOIN produtos p ON pv.produto_id = p.id
-                            WHERE pv.venda_id = ?
-                        ");
-                        $stmtProdutos->execute([$venda['id']]);
-                        $produtos = $stmtProdutos->fetchAll(PDO::FETCH_ASSOC);
+    <!-- INFO VENDA -->
+    <div class="card">
+        <div class="flex">
+            <div><b>Recibo:</b> #<?= $venda_id ?></div>
+            <div><b>Data:</b> <?= $venda['data_venda'] ?></div>
+        </div>
 
-                        foreach($produtos as $p):
-                            $subtotal = $p['quantidade'] * $p['preco_unitario'];
-                        ?>
-                            <tr>
-                                <td><?= htmlspecialchars($p['nome']) ?></td>
-                                <td><?= $p['quantidade'] ?></td>
-                                <td><?= number_format($p['preco_unitario'], 2, ',', '.') ?></td>
-                                <td><?= number_format($subtotal, 2, ',', '.') ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+        <div class="flex">
+            <div><b>Operador:</b> <?= $venda['operador_nome'] ?></div>
+            <div><b>Pagamento:</b> <?= $venda['metodo_pagamento'] ?></div>
+        </div>
+    </div>
 
-                    <p><b>Total:</b> MT <?= number_format($venda['total'], 2, ',', '.') ?></p>
-                    <p><b>Pago:</b> MT <?= number_format($venda['valor_pago'], 2, ',', '.') ?></p>
-                    <p><b>Troco:</b> MT <?= number_format($venda['troco'], 2, ',', '.') ?></p>
+    <!-- CLIENTE -->
+    <div class="card">
+        <b>Cliente:</b> <?= $cliente ?><br>
+        Tel: <?= $venda['telefone'] ?><br>
+        Email: <?= $venda['email'] ?><br>
+        Morada: <?= $venda['morada'] ?><br>
+        NUIT: <?= $venda['nuit'] ?>
+    </div>
 
-                    <button class="btn btn-sm btn-success" onclick="imprimirVenda(<?= $venda['id'] ?>)">
-                        Imprimir
-                    </button>
-                </div>
-            </div>
+    <!-- ITENS -->
+    <table>
+        <tr>
+            <th>Produto</th>
+            <th>Qtd</th>
+            <th>Preço</th>
+            <th>Subtotal</th>
+        </tr>
+
+        <?php foreach ($itens as $i): 
+            $sub = $i['quantidade'] * $i['preco_unitario'];
+        ?>
+        <tr>
+            <td><?= $i['nome'] ?></td>
+            <td><?= $i['quantidade'] ?></td>
+            <td><?= number_format($i['preco_unitario'],2) ?></td>
+            <td><?= number_format($sub,2) ?></td>
+        </tr>
         <?php endforeach; ?>
-    <?php endif; ?>
+    </table>
+
+    <!-- TOTAIS -->
+    <div class="total">
+        TOTAL: MT <?= number_format($total,2) ?><br>
+        PAGO: MT <?= number_format($valorPago,2) ?><br>
+        TROCO: MT <?= number_format($troco,2) ?>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <?= $config['mensagem_rodape'] ?>
+    </div>
+
 </div>
 
-<script>
-function imprimirVenda(vendaId) {
-    if (!confirm('Deseja enviar esta venda para impressão?')) return;
-
-    fetch(`imprimir_venda.php?venda_id=${vendaId}`)
-        .then(response => response.text())
-        .then(text => {
-            alert(text); // exibe mensagem "Impressão enviada com sucesso!"
-        })
-        .catch(err => {
-            console.error(err);
-            alert('Erro ao enviar impressão.');
-        });
-}
-</script>
 </body>
 </html>

@@ -23,18 +23,53 @@ class VendaController
         $_SESSION['carrinho'] ??= [];
     }
 
+    /* =========================
+       GERAR RECIBO POR CAIXA
+    ========================= */
+    private function gerarNumeroRecibo(int $abertura_id): int
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT ultimo_numero 
+            FROM caixa_recibos 
+            WHERE abertura_id = ? 
+            FOR UPDATE
+        ");
+        $stmt->execute([$abertura_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($row) {
+
+            $numero = (int)$row['ultimo_numero'] + 1;
+
+            $stmt = $this->pdo->prepare("
+                UPDATE caixa_recibos 
+                SET ultimo_numero = ? 
+                WHERE abertura_id = ?
+            ");
+            $stmt->execute([$numero, $abertura_id]);
+
+        } else {
+
+            $numero = 1;
+
+            $stmt = $this->pdo->prepare("
+                INSERT INTO caixa_recibos (abertura_id, ultimo_numero)
+                VALUES (?, ?)
+            ");
+            $stmt->execute([$abertura_id, $numero]);
+        }
+
+        return $numero;
+    }
+
     public function processarRequisicao(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
 
-        /* =========================
-           FINALIZAR VENDA
-        ========================= */
         if (isset($_POST['finalizar_venda'])) {
 
             header('Content-Type: application/json');
 
-            // 🔥 GARANTE cliente vindo do frontend
             if (isset($_POST['cliente_id'])) {
                 $_SESSION['cliente_id'] = (int)$_POST['cliente_id'];
             }
@@ -48,17 +83,11 @@ class VendaController
             exit;
         }
 
-        /* =========================
-           ADICIONAR PRODUTO
-        ========================= */
         if (isset($_POST['adicionar'])) {
             $this->adicionarProduto();
             $this->redirect();
         }
 
-        /* =========================
-           REMOVER PRODUTO
-        ========================= */
         if (isset($_POST['remover_produto'])) {
             unset($_SESSION['carrinho'][$_POST['remover_produto']]);
             $this->redirect();
@@ -104,9 +133,6 @@ class VendaController
         ];
     }
 
-    /* =========================
-       FINALIZAR VENDA
-    ========================= */
     public function finalizarVenda(float $valorPago, string $metodo): array
     {
         $carrinho = $_SESSION['carrinho'];
@@ -130,14 +156,20 @@ class VendaController
 
             $clienteId = $_SESSION['cliente_id'] ?? null;
             $usuarioId = $_SESSION['usuario_id'] ?? null;
+            $aberturaId = $_SESSION['abertura_id'] ?? null;
 
             /* =========================
-               INSERIR VENDA (CORRIGIDO)
+               RECIBO POR CAIXA
+            ========================= */
+            $numeroRecibo = $this->gerarNumeroRecibo($aberturaId);
+
+            /* =========================
+               INSERIR VENDA
             ========================= */
             $stmt = $this->pdo->prepare("
                 INSERT INTO vendas
-                (usuario_id, cliente_id, total, valor_pago, troco, metodo_pagamento, data_venda)
-                VALUES (?,?,?,?,?,?,NOW())
+                (usuario_id, cliente_id, total, valor_pago, troco, metodo_pagamento, data_venda, numero_recibo, abertura_id)
+                VALUES (?,?,?,?,?,?,NOW(),?,?)
             ");
 
             $stmt->execute([
@@ -146,7 +178,9 @@ class VendaController
                 $total,
                 $valorPago,
                 $valorPago - $total,
-                $metodo
+                $metodo,
+                $numeroRecibo,
+                $aberturaId
             ]);
 
             $vendaId = $this->pdo->lastInsertId();
@@ -180,64 +214,24 @@ class VendaController
             $this->pdo->commit();
 
             $_SESSION['carrinho'] = [];
-            $_SESSION['numero_recibo'] = $vendaId;
-
-            $this->imprimir($vendaId, $carrinho, $total, $valorPago, $metodo);
+            $_SESSION['numero_recibo'] = $numeroRecibo;
+            $_SESSION['print_last_sale'] = $vendaId;
 
             return [
                 'success' => true,
                 'venda_id' => $vendaId,
+                'numero_recibo' => $numeroRecibo,
                 'pdf_url' => "gerar_recibo.php?venda_id=$vendaId"
             ];
 
         } catch (\Throwable $e) {
+
             $this->pdo->rollBack();
 
             return [
                 'success' => false,
                 'mensagem' => $e->getMessage()
             ];
-        }
-    }
-
-    /* =========================
-       IMPRESSÃO
-    ========================= */
-    private function imprimir($vendaId, $carrinho, $total, $valorPago, $metodo): void
-    {
-        try {
-
-            $config = $this->pdo->query("
-                SELECT * FROM configuracoes_empresa LIMIT 1
-            ")->fetch(PDO::FETCH_ASSOC);
-
-            $printer = ImpressoraFactory::criar($config);
-
-            $printer->setJustification(\Mike42\Escpos\Printer::JUSTIFY_CENTER);
-            $printer->text(($config['nome_empresa'] ?? 'Empresa') . "\n");
-            $printer->text("RECIBO #$vendaId\n");
-            $printer->text("------------------------\n");
-
-            $printer->setJustification(\Mike42\Escpos\Printer::JUSTIFY_LEFT);
-
-            foreach ($carrinho as $item) {
-                $printer->text(
-                    mb_strimwidth($item['nome'], 0, 20, '') .
-                    " x{$item['quantidade']}\n"
-                );
-            }
-
-            $printer->text("------------------------\n");
-            $printer->text("TOTAL: MT " . number_format($total,2,',','.') . "\n");
-            $printer->text("PAGO: MT " . number_format($valorPago,2,',','.') . "\n");
-            $printer->text("TROCO: MT " . number_format($valorPago - $total,2,',','.') . "\n");
-
-            $printer->feed(2);
-            $printer->cut();
-            $printer->close();
-
-        } catch (\Throwable $e) {
-            error_log("ERRO IMPRESSÃO: " . $e->getMessage());
         }
     }
 }

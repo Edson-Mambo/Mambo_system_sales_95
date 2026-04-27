@@ -1,116 +1,165 @@
 <?php
 session_start();
+
 require_once __DIR__ . '/../config/database.php';
 require_once "../middleware/auth.php";
 
 requireRole(['admin', 'gerente', 'supervisor']);
+
+/* =========================
+   VOLTAR ERP
+========================= */
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+
+$rotas = [
+    'admin' => 'index_admin.php',
+    'gerente' => 'index_gerente.php',
+    'supervisor' => 'index_supervisor.php'
+];
+
+$voltar = $rotas[$nivel] ?? 'index.php';
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="pt">
 <head>
+<meta charset="UTF-8">
 <title>Gerador de Labels</title>
 
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+
 <style>
-body { font-family: Arial; background:#f5f6fa; padding:20px; }
-
-.container {
-    max-width: 900px;
-    margin: auto;
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+body{
+    background:#eef2f7;
 }
 
-input, button {
-    padding: 10px;
-    margin: 5px;
+/* HEADER */
+.header-box{
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 3px 12px rgba(0,0,0,0.08);
+    margin-bottom:20px;
 }
 
-.result {
-    margin-top: 20px;
-    padding: 15px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
+/* CARD */
+.card-erp{
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 3px 12px rgba(0,0,0,0.08);
+    margin-bottom:20px;
 }
 
-.btn {
-    background: #0d6efd;
-    color: white;
-    border: none;
-    cursor: pointer;
-    border-radius: 6px;
+/* RESULT */
+.result-box{
+    background:#f8f9fa;
+    padding:15px;
+    border-radius:10px;
+    border-left:4px solid #0d6efd;
+    margin-top:15px;
 }
 
-.btn:hover {
-    background: #084298;
+/* TEXTAREA */
+textarea{
+    resize:none;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="container mt-4">
 
-<h2>🏷️ Gerador de Labels de Produtos</h2>
+    <!-- HEADER -->
+    <div class="header-box d-flex justify-content-between align-items-center">
+        <div>
+            <h3 class="mb-0">🏷️ Gerador de Labels </h3>
+            <small>Impressão de etiquetas de produtos</small>
+        </div>
 
+        <a href="<?= $voltar ?>" class="btn btn-outline-secondary">
+            ← Voltar
+        </a>
+    </div>
 
-<!-- SKU SEARCH -->
-<input type="text" id="sku" placeholder="Digite SKU / Código de barras">
-<button class="btn" onclick="buscarProduto()">Pesquisar</button>
+    <!-- BUSCA INDIVIDUAL -->
+    <div class="card-erp">
+        <h5>🔎 Buscar Produto</h5>
 
-<div id="produtoInfo" class="result" style="display:none;"></div>
+        <div class="row">
+            <div class="col-md-9">
+                <input 
+                    type="text" 
+                    id="sku" 
+                    class="form-control"
+                    placeholder="Digite SKU ou código de barras">
+            </div>
 
-<hr>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" onclick="buscarProduto()">
+                    Pesquisar
+                </button>
+            </div>
+        </div>
 
-<!-- SINGLE LABEL -->
-<h3>Gerar 1 Label</h3>
-<button class="btn" onclick="gerarLabel(1)">Gerar Label</button>
+        <div id="produtoInfo" class="result-box" style="display:none;"></div>
+    </div>
 
-<hr>
+    <!-- LABEL ÚNICA -->
+    <div class="card-erp">
+        <h5>🖨️ Gerar Label Individual</h5>
 
-<!-- MULTI LABEL -->
-<h3>Gerar Múltiplas Labels (1–20)</h3>
-<textarea id="skus" placeholder="Ex: 12345, 67890, 11122" 
-style="width:100%; height:80px;"></textarea>
+        <button class="btn btn-success w-100" onclick="gerarLabel(1)">
+            Gerar 1 Label
+        </button>
+    </div>
 
-<br>
+    <!-- LABEL MÚLTIPLA -->
+    <div class="card-erp">
+        <h5>📦 Gerar Labels em Lote</h5>
 
-<button class="btn" onclick="gerarMultiplosSKUs()">Gerar Labels A4</button>
-<br>
-<br>
+        <label class="mb-2">
+            Informe múltiplos códigos separados por vírgula:
+        </label>
 
- <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
+        <textarea 
+            id="skus"
+            class="form-control"
+            rows="4"
+            placeholder="Ex: 12345,67890,11122">
+        </textarea>
 
-            $voltar = match($nivel) {
-                'admin' => 'index_admin.php',
-                'supervisor' => 'index_supervisor.php',
-                'gerente' => 'index_gerente.php',
-                default => 'index.php'
-            };
-            ?>
+        <button class="btn btn-primary mt-3 w-100" onclick="gerarMultiplosSKUs()">
+            Gerar Labels A4
+        </button>
+    </div>
 
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
 </div>
 
-
 <script>
-
 let produtoAtual = null;
 
+/* =========================
+   BUSCAR PRODUTO
+========================= */
 async function buscarProduto() {
 
-    const sku = document.getElementById('sku').value;
+    const sku = document.getElementById('sku').value.trim();
 
-    const res = await fetch('api_get_product_by_sku.php?sku=' + sku);
+    if (!sku) {
+        alert("Digite um SKU ou código.");
+        return;
+    }
+
+    const res = await fetch(
+        'api_get_product_by_sku.php?sku=' + encodeURIComponent(sku)
+    );
+
     const data = await res.json();
 
     if (!data.id) {
-        alert("Produto não encontrado");
+        alert("Produto não encontrado.");
         return;
     }
 
@@ -118,17 +167,20 @@ async function buscarProduto() {
 
     document.getElementById('produtoInfo').style.display = 'block';
     document.getElementById('produtoInfo').innerHTML = `
-        <b>${data.nome}</b><br>
-        💰 ${data.preco} Kz<br>
-        📦 ${data.categoria_nome}<br>
-        🔢 ${data.codigo_barra}
+        <strong>${data.nome}</strong><br>
+        💰 Preço: ${data.preco} MT<br>
+        📦 Categoria: ${data.categoria_nome}<br>
+        🔢 Código: ${data.codigo_barra}
     `;
 }
 
+/* =========================
+   LABEL ÚNICA
+========================= */
 function gerarLabel(qtd) {
 
     if (!produtoAtual) {
-        alert("Pesquisa um produto primeiro");
+        alert("Pesquise um produto primeiro.");
         return;
     }
 
@@ -138,13 +190,15 @@ function gerarLabel(qtd) {
     );
 }
 
-
+/* =========================
+   LABEL EM LOTE
+========================= */
 function gerarMultiplosSKUs() {
 
-    const skus = document.getElementById('skus').value;
+    const skus = document.getElementById('skus').value.trim();
 
-    if (!skus.trim()) {
-        alert("Digite pelo menos um SKU");
+    if (!skus) {
+        alert("Digite pelo menos um código.");
         return;
     }
 

@@ -1,3 +1,44 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once '../../config/database.php';
+
+$pdo = Database::conectar();
+
+/* =========================
+   VERIFICA LOGIN
+========================= */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: ../../public/login.php");
+    exit;
+}
+
+/* =========================
+   NÍVEL CORRETO DO SISTEMA
+========================= */
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+
+$permitidos = ['admin', 'supervisor', 'gerente'];
+
+if (!in_array($nivel, $permitidos)) {
+    header("Location: ../../public/index.php");
+    exit;
+}
+
+/* =========================
+   ROTAS VOLTAR
+========================= */
+$rotas = [
+    'admin' => '../../public/index_admin.php',
+    'supervisor' => '../../public/index_supervisor.php',
+    'gerente' => '../../public/index_gerente.php'
+];
+
+$voltar = $rotas[$nivel] ?? '../../public/index.php';
+?>
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -13,20 +54,9 @@
         <div class="card-body p-5">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0">Recepção de Estoque</h2>
-                <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
-
-            $voltar = match($nivel) {
-                'admin' => '../../public/index_admin.php',
-                'supervisor' => '../../public/index_supervisor.php',
-                'gerente' => '../../public/index_gerente.php',
-                default => '../../public/index.php'
-            };
-            ?>
-
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
+                <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
+                    ← Voltar
+                </a>
             </div>
 
             <form action="../Controller/processar_recepcao.php" method="post">

@@ -1,4 +1,5 @@
 <?php
+
 require '../vendor/autoload.php';
 require '../config/database.php';
 
@@ -58,24 +59,40 @@ $stmt->execute([$venda_id]);
 $itens = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* =========================
-   CLIENTE FORMATADO
+   CLIENTE
 ========================= */
 $clienteNome = trim(($venda['cliente_nome'] ?? '') . ' ' . ($venda['cliente_apelido'] ?? ''));
-if ($clienteNome === '') $clienteNome = 'Cliente Geral';
+if ($clienteNome === '') {
+    $clienteNome = 'Cliente Geral';
+}
 
 /* =========================
-   TOTAL
+   🔥 RECONSTRUIR TOTAL (MAIS SEGURO)
 ========================= */
-$total = 0;
+$totalCalculado = 0;
+
+foreach ($itens as $i) {
+    $totalCalculado += (float)$i['quantidade'] * (float)$i['preco_unitario'];
+}
+
+/* =========================
+   VALORES FINANCEIROS (ROBUSTO)
+========================= */
+$total = (float)($venda['total'] ?? $totalCalculado);
+$valorPago = (float)($venda['valor_pago'] ?? 0);
+$troco = (float)($venda['troco'] ?? ($valorPago - $total));
 
 /* =========================
    LOGO
 ========================= */
 $logo = '';
+
 if (!empty($config['logo'])) {
+
     $logoPath = __DIR__ . '/../public/uploads/' . $config['logo'];
 
     if (file_exists($logoPath)) {
+
         $type = pathinfo($logoPath, PATHINFO_EXTENSION);
         $data = file_get_contents($logoPath);
         $base64 = base64_encode($data);
@@ -85,104 +102,24 @@ if (!empty($config['logo'])) {
 }
 
 /* =========================
-   HTML MODERNO
+   HTML
 ========================= */
 $html = "
 <style>
-body{
-    font-family: 'Arial';
-    font-size: 12px;
-    color:#333;
-    margin:0;
-    padding:0;
-}
-
-.container{
-    padding:20px;
-}
-
-.header{
-    text-align:center;
-    border-bottom:2px solid #222;
-    padding-bottom:10px;
-    margin-bottom:15px;
-}
-
-.logo{
-    max-height:70px;
-    margin-bottom:8px;
-}
-
-.empresa{
-    font-size:18px;
-    font-weight:700;
-    letter-spacing:1px;
-}
-
-.sub{
-    font-size:11px;
-    color:#666;
-}
-
-.card{
-    border:1px solid #e0e0e0;
-    border-radius:6px;
-    padding:10px;
-    margin-bottom:10px;
-    background:#fafafa;
-}
-
-.flex{
-    display:flex;
-    justify-content:space-between;
-    font-size:11px;
-}
-
-.title{
-    font-weight:bold;
-    margin-bottom:5px;
-    font-size:12px;
-}
-
-table{
-    width:100%;
-    border-collapse:collapse;
-    margin-top:10px;
-}
-
-th{
-    background:#111;
-    color:#fff;
-    padding:8px;
-    font-size:11px;
-    text-transform:uppercase;
-}
-
-td{
-    padding:8px;
-    border-bottom:1px solid #eee;
-    font-size:11px;
-}
-
-.right{
-    text-align:right;
-}
-
-.total{
-    text-align:right;
-    font-size:16px;
-    font-weight:bold;
-    margin-top:15px;
-    padding-top:10px;
-    border-top:2px solid #000;
-}
-
-.footer{
-    margin-top:25px;
-    text-align:center;
-    font-size:10px;
-    color:#777;
-}
+body{font-family:Arial;font-size:12px;color:#333;}
+.container{padding:20px;}
+.header{text-align:center;border-bottom:2px solid #222;padding-bottom:10px;}
+.logo{max-height:70px;margin-bottom:8px;}
+.empresa{font-size:18px;font-weight:bold;}
+.sub{font-size:11px;color:#666;}
+.card{border:1px solid #ddd;padding:10px;margin-top:10px;}
+.flex{display:flex;justify-content:space-between;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th{background:#111;color:#fff;padding:8px;}
+td{padding:8px;border-bottom:1px solid #eee;}
+.right{text-align:right;}
+.total{text-align:right;font-size:15px;font-weight:bold;margin-top:10px;}
+.footer{text-align:center;font-size:10px;margin-top:20px;}
 </style>
 
 <div class='container'>
@@ -190,20 +127,13 @@ td{
 <div class='header'>
     $logo
     <div class='empresa'>{$config['nome_empresa']}</div>
-    
     <div class='sub'>{$config['endereco']}</div>
-    
     <div class='sub'>
-        {$config['rua_avenida']}, 
-        {$config['bairro']}, 
-        {$config['cidade']}, 
-        {$config['provincia']}
+        {$config['rua_avenida']}, {$config['bairro']}, {$config['cidade']}, {$config['provincia']}
     </div>
-
     <div class='sub'>
         Tel: {$config['telefone']} | {$config['email_empresa']}
     </div>
-
     <div class='sub'>
         NUIT: {$config['nuit_empresa']}
     </div>
@@ -221,8 +151,7 @@ td{
 </div>
 
 <div class='card'>
-    <div class='title'>Dados do Cliente</div>
-    Nome: $clienteNome<br>
+    <strong>Cliente:</strong> $clienteNome<br>
     Tel: {$venda['cliente_telefone']}<br>
     Email: {$venda['cliente_email']}<br>
     Morada: {$venda['cliente_morada']}<br>
@@ -234,14 +163,13 @@ td{
     <th>Produto</th>
     <th class='right'>Qtd</th>
     <th class='right'>Preço</th>
-    <th class='right'>Total</th>
+    <th class='right'>Subtotal</th>
 </tr>
 ";
 
 foreach ($itens as $i) {
 
-    $sub = $i['quantidade'] * $i['preco_unitario'];
-    $total += $sub;
+    $sub = (float)$i['quantidade'] * (float)$i['preco_unitario'];
 
     $html .= "
     <tr>
@@ -257,7 +185,9 @@ $html .= "
 </table>
 
 <div class='total'>
-    TOTAL: MT " . number_format($total, 2) . "
+    TOTAL: MT " . number_format($total, 2) . "<br>
+    PAGO: MT " . number_format($valorPago, 2) . "<br>
+    TROCO: MT " . number_format($troco, 2) . "
 </div>
 
 <div class='footer'>
@@ -268,10 +198,13 @@ $html .= "
 ";
 
 /* =========================
-   PDF
+   DOWNLOAD DIRETO
 ========================= */
 $dompdf = new Dompdf();
 $dompdf->loadHtml($html);
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
-$dompdf->stream("recibo_$venda_id.pdf", ["Attachment" => true]);
+
+$dompdf->stream("recibo_$venda_id.pdf", [
+    "Attachment" => true
+]);

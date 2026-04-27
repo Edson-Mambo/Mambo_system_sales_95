@@ -1,14 +1,51 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../../config/database.php';
 
 $pdo = Database::conectar();
 
+/* =========================
+   AUTH ERP
+========================= */
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: ../../public/login.php");
+    exit;
+}
+
+$nivel = $_SESSION['nivel_acesso'] ?? '';
+
+$permitidos = ['admin', 'gerente', 'supervisor'];
+
+if (!in_array($nivel, $permitidos)) {
+    header("Location: ../../public/index.php");
+    exit;
+}
+
+/* =========================
+   VOLTAR ERP
+========================= */
+$voltar = [
+    'admin' => '../../public/index_admin.php',
+    'gerente' => '../../public/index_gerente.php',
+    'supervisor' => '../../public/index_supervisor.php'
+][$nivel] ?? '../../public/index.php';
+
+/* =========================
+   FILTRO
+========================= */
 $data_inicial = $_GET['data_inicial'] ?? '';
 $data_final = $_GET['data_final'] ?? '';
 
-$sql = "SELECT re.*, p.nome AS nome_produto
-        FROM recepcao_estoque re
-        JOIN produtos p ON re.produto_id = p.id";
+$sql = "
+SELECT 
+    re.*,
+    p.nome AS produto
+FROM recepcao_estoque re
+JOIN produtos p ON p.id = re.produto_id
+";
 
 $params = [];
 
@@ -23,121 +60,222 @@ $sql .= " ORDER BY re.data_recebimento DESC";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $recepcoes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$dataHoje = date('d/m/Y');
 ?>
 
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-    <meta charset="UTF-8">
-    <title>Relatório de Recepção</title>
-    <link href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<meta charset="UTF-8">
+<title>ERP | Recepção de Estoque</title>
+
+<link href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+
+/* =========================
+   ERP BASE
+========================= */
+body{
+    background:#f4f6f9;
+}
+
+/* HEADER ERP */
+.header{
+    background:#111827;
+    color:#fff;
+    padding:15px 20px;
+    border-radius:10px;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    margin-bottom:15px;
+}
+
+.header h3{
+    margin:0;
+    font-size:18px;
+}
+
+/* CARD ERP */
+.erp-card{
+    background:#fff;
+    padding:15px;
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.05);
+}
+
+/* TABLE */
+.table thead{
+    background:#1f2937;
+    color:#fff;
+}
+
+.table tbody tr:hover{
+    background:#f3f4f6;
+}
+
+/* BADGES */
+.badge-product{
+    font-weight:600;
+}
+
+.badge-qty{
+    font-weight:700;
+}
+
+/* FOOTER INFO */
+.footer-info{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:#6b7280;
+    margin-top:10px;
+}
+
+/* BUTTONS ERP */
+.btn-erp{
+    border-radius:6px;
+    padding:6px 10px;
+}
+
+/* FILTER BOX */
+.filter-box{
+    background:#fff;
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:15px;
+}
+
+</style>
 </head>
-<body class="bg-light">
 
-<div class="container py-5">
-    <div class="card shadow border-0 rounded-4">
-        <div class="card-body p-4">
-            <h2 class="mb-4">📦 Relatório de Recepção de Estoque</h2>
+<body class="container py-4">
 
-            <?php
-            $nivel = $_SESSION['usuario_nivel'] ?? '';
+<!-- HEADER -->
+<div class="header">
+    <h3>📦 Recepção de Estoque</h3>
 
-            $voltar = match($nivel) {
-                'admin' => '../../public/index_admin.php',
-                'supervisor' => '../../public/index_supervisor.php',
-                'gerente' => '../../public/index_gerente.php',
-                default => '../../public/index.php'
-            };
-            ?>
+    <a href="<?= $voltar ?>" class="btn btn-light btn-sm">
+        ← Voltar
+    </a>
+</div>
 
-            <a href="<?= $voltar ?>" class="btn btn-outline-secondary me-2">
-                ← Voltar
-            </a>
+<!-- FILTER -->
+<div class="filter-box">
 
-            <form class="row g-3 mb-4" method="GET">
-                <div class="col-md-4">
-                    <label for="data_inicial" class="form-label">Data Inicial</label>
-                    <input type="date" class="form-control" id="data_inicial" name="data_inicial" value="<?= htmlspecialchars($data_inicial) ?>">
-                </div>
-                <div class="col-md-4">
-                    <label for="data_final" class="form-label">Data Final</label>
-                    <input type="date" class="form-control" id="data_final" name="data_final" value="<?= htmlspecialchars($data_final) ?>">
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary me-2">Filtrar</button>
-                    <a href="relatorio_recepcao.php" class="btn btn-outline-secondary">Limpar</a>
-                </div>
-            </form>
+<form class="row g-3" method="GET">
 
-            <?php if ($recepcoes): ?>
-            <div class="mb-3 text-end">
-                <button id="btnExportExcel" class="btn btn-success me-2">⬇️ Exportar Excel</button>
-                <button id="btnExportPDF" class="btn btn-danger">⬇️ Exportar PDF</button>
-            </div>
-            <?php endif ?>
+    <div class="col-md-4">
+        <label class="form-label">Data Inicial</label>
+        <input type="date" name="data_inicial" class="form-control"
+               value="<?= htmlspecialchars($data_inicial) ?>">
+    </div>
 
-            <div class="table-responsive" id="tabelaRelatorio">
-                <table class="table table-bordered table-striped align-middle">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>#</th>
-                            <th>Produto</th>
-                            <th>Quantidade</th>
-                            <th>Unidade</th>
-                            <th>Data</th>
-                            <th>Observação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recepcoes as $i => $r): ?>
-                            <tr>
-                                <td><?= $i + 1 ?></td>
-                                <td><?= htmlspecialchars($r['nome_produto']) ?></td>
-                                <td><?= number_format($r['quantidade_recebida'], 2, ',', '.') ?></td>
-                                <td><?= $r['unidade'] === 'peca' ? 'Peça(s)' : 'Grama(s)' ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($r['data_recebimento'])) ?></td>
-                                <td><?= nl2br(htmlspecialchars($r['observacao'])) ?></td>
-                            </tr>
-                        <?php endforeach ?>
-                    </tbody>
-                </table>
-            </div>
+    <div class="col-md-4">
+        <label class="form-label">Data Final</label>
+        <input type="date" name="data_final" class="form-control"
+               value="<?= htmlspecialchars($data_final) ?>">
+    </div>
 
-            <?php if (empty($recepcoes)): ?>
-                <div class="alert alert-warning text-center mt-3">
-                    Nenhuma recepção de estoque registrada no período selecionado.
-                </div>
-            <?php endif ?>
-        </div>
+    <div class="col-md-4 d-flex align-items-end gap-2">
+        <button class="btn btn-primary btn-erp">Filtrar</button>
+        <a href="?" class="btn btn-outline-secondary btn-erp">Limpar</a>
+    </div>
+
+</form>
+
+</div>
+
+<!-- TABLE CARD -->
+<div class="erp-card">
+
+<div class="d-flex justify-content-between mb-2">
+    <div>
+        <strong>Total:</strong> <?= count($recepcoes) ?> registos
+    </div>
+    <div>
+        📅 <?= $dataHoje ?>
     </div>
 </div>
 
-<!-- Scripts -->
-<script src="../../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
+<div class="table-responsive">
+
+<table class="table table-hover align-middle">
+
+<thead>
+<tr>
+    <th>#</th>
+    <th>Produto</th>
+    <th>Quantidade</th>
+    <th>Unidade</th>
+    <th>Data</th>
+    <th>Observação</th>
+</tr>
+</thead>
+
+<tbody>
+
+<?php foreach ($recepcoes as $i => $r): ?>
+
+<tr>
+
+    <td><?= $i + 1 ?></td>
+
+    <td class="badge-product">
+        <?= htmlspecialchars($r['produto']) ?>
+    </td>
+
+    <td>
+        <span class="badge-qty">
+            <?= number_format($r['quantidade_recebida'], 2, ',', '.') ?>
+        </span>
+    </td>
+
+    <td>
+        <?= $r['unidade'] === 'peca' ? 'Peça(s)' : 'Grama(s)' ?>
+    </td>
+
+    <td>
+        <?= date('d/m/Y H:i', strtotime($r['data_recebimento'])) ?>
+    </td>
+
+    <td>
+        <?= htmlspecialchars($r['observacao']) ?>
+    </td>
+
+</tr>
+
+<?php endforeach; ?>
+
+</tbody>
+
+</table>
+
+</div>
+
+<?php if (empty($recepcoes)): ?>
+    <div class="alert alert-warning text-center mt-3">
+        Nenhuma recepção encontrada.
+    </div>
+<?php endif; ?>
+
+<div class="footer-info">
+    <span>Sistema Mambo System Sales 95</span>
+    <span>Relatório de Recepção de Estoque</span>
+</div>
+
+</div>
+
+<!-- EXPORT (mantido simples) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-table2excel/1.1.2/jquery.table2excel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <script>
-    $('#btnExportExcel').click(function () {
-        $(".table").table2excel({
-            name: "RecepcaoEstoque",
-            filename: "relatorio_recepcao",
-            fileext: ".xls"
-        });
-    });
-
-    $('#btnExportPDF').click(function () {
-        const elemento = document.getElementById('tabelaRelatorio');
-        const opt = {
-            margin:       0.3,
-            filename:     'relatorio_recepcao.pdf',
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2 },
-            jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
-        };
-        html2pdf().set(opt).from(elemento).save();
-    });
 </script>
 
 </body>

@@ -4,39 +4,41 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 /* =========================
-   VERIFICAR LOGIN
+   LOGIN OBRIGATÓRIO
 ========================= */
 function requireLogin() {
 
-    if (!isset($_SESSION['usuario_id'])) {
+    if (empty($_SESSION['usuario_id'])) {
         header("Location: login.php");
         exit;
     }
 }
 
 /* =========================
-   VERIFICAR NÍVEL
+   PROTEGER POR ROLE
 ========================= */
 function requireRole($roles = []) {
 
     requireLogin();
 
-    if (!isset($_SESSION['nivel_acesso'])) {
-        header("Location: login.php");
-        exit;
-    }
+    $nivel = $_SESSION['nivel_acesso'] ?? null;
 
-    if (!in_array($_SESSION['nivel_acesso'], $roles)) {
+    if (!$nivel || !in_array($nivel, $roles)) {
         die("⛔ Acesso negado");
     }
 }
 
 /* =========================
-   REDIRECIONAR APÓS LOGIN
+   IMPORTANTE:
+   ❌ NÃO usar redirect automático aqui
+   (isso estava a quebrar o caixa)
 ========================= */
 function redirectByRole() {
 
-    if (!isset($_SESSION['nivel_acesso'])) return;
+    if (empty($_SESSION['nivel_acesso'])) {
+        header("Location: login.php");
+        exit;
+    }
 
     switch ($_SESSION['nivel_acesso']) {
 
@@ -53,7 +55,7 @@ function redirectByRole() {
             break;
 
         case 'caixa':
-            header("Location: venda.php");
+            header("Location: ../public/abrir_caixa.php");
             break;
 
         default:

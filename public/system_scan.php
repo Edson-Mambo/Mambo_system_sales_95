@@ -9,9 +9,9 @@ requireRole(['admin', 'gerente']);
 
 $pdo = Database::conectar();
 
-/**
- * LOG SAFE (evita erro fatal se writeLog não existir)
- */
+/* =========================
+   LOG SAFE
+========================= */
 function safeLog($pdo, $type, $action, $description)
 {
     try {
@@ -28,11 +28,12 @@ function safeLog($pdo, $type, $action, $description)
             $_SERVER['REMOTE_ADDR'] ?? null
         ]);
 
-    } catch (Exception $e) {
-        // nunca quebrar o scan por causa do log
-    }
+    } catch (Exception $e) {}
 }
 
+/* =========================
+   TABELAS ERP
+========================= */
 $tabelas = [
     "ajustes_estoque","carrinho_temp","categorias","clientes",
     "configuracoes","cotacao_itens","cotacoes","facturas",
@@ -49,167 +50,214 @@ $tabelas = [
 
 $resultados = [];
 
+/* =========================
+   SCAN
+========================= */
 foreach ($tabelas as $tabela) {
 
     try {
 
-        // 1. verificar se tabela existe
         $check = $pdo->query("SHOW TABLES LIKE '$tabela'");
+
         if ($check->rowCount() == 0) {
             $resultados[] = [
                 "tabela" => $tabela,
                 "status" => "MISSING",
-                "total" => 0,
-                "ultimo" => null
+                "total" => 0
             ];
-
-            safeLog($pdo, "ERROR", "SCAN_TABLE", "Tabela inexistente: $tabela");
             continue;
         }
 
-        // 2. total registos
-        $stmt = $pdo->query("SELECT COUNT(*) as total FROM `$tabela`");
-        $total = $stmt->fetch()['total'] ?? 0;
+        $total = $pdo->query("SELECT COUNT(*) FROM `$tabela`")->fetchColumn();
 
-        // 3. último registo (se existir coluna id ou created_at)
-        $ultimo = null;
-
-        try {
-            $stmt2 = $pdo->query("
-                SELECT * FROM `$tabela`
-                ORDER BY 1 DESC
-                LIMIT 1
-            ");
-            $row = $stmt2->fetch(PDO::FETCH_ASSOC);
-            $ultimo = $row ? json_encode($row) : null;
-        } catch (Exception $e) {
-            $ultimo = "N/A";
-        }
-
-        // 4. status inteligente
         $status = "OK";
 
-        if ($total == 0) {
-            $status = "EMPTY";
-        }
+        if ($total == 0) $status = "EMPTY";
+        elseif ($total < 5) $status = "LOW";
 
-        if ($total > 0 && $total < 5) {
-            $status = "LOW_DATA";
-        }
-
-        // 5. resultado
         $resultados[] = [
             "tabela" => $tabela,
             "status" => $status,
-            "total" => $total,
-            "ultimo" => $ultimo
+            "total" => $total
         ];
-
-        safeLog($pdo, "SYSTEM", "SCAN_OK", "$tabela OK ($total registos)");
 
     } catch (Exception $e) {
 
         $resultados[] = [
             "tabela" => $tabela,
             "status" => "ERROR",
-            "total" => 0,
-            "ultimo" => null
+            "total" => 0
         ];
-
-        safeLog($pdo, "ERROR", "SCAN_FAIL", "$tabela erro: " . $e->getMessage());
     }
 }
+
+/* =========================
+   STATS
+========================= */
+$totalTables = count($resultados);
+$errors = count(array_filter($resultados, fn($r)=>$r['status']=='ERROR'));
+$empty = count(array_filter($resultados, fn($r)=>$r['status']=='EMPTY'));
+$low = count(array_filter($resultados, fn($r)=>$r['status']=='LOW'));
 
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="pt">
 <head>
-    <title>Auditoria do Sistema</title>
+<meta charset="UTF-8">
+<title>Auditoria ERP</title>
 
-    <style>
-        body { font-family: Arial; background:#f4f6f9; padding:20px; }
+<link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 
-        .grid {
-            display:grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap:15px;
-            margin-bottom:20px;
-        }
+<style>
 
-        .card {
-            background:white;
-            padding:15px;
-            border-radius:12px;
-            box-shadow:0 4px 10px rgba(0,0,0,0.08);
-        }
+body{
+    background:#f5f7fb;
+}
 
-        .ok { color:green; font-weight:bold; }
-        .empty { color:orange; font-weight:bold; }
-        .low { color:#d97706; font-weight:bold; }
-        .error { color:red; font-weight:bold; }
-        .missing { color:#7f1d1d; font-weight:bold; }
+/* HEADER */
+.header{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    margin-bottom:20px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.05);
+}
 
-        table { width:100%; border-collapse: collapse; background:white; }
-        th, td { padding:10px; border:1px solid #ddd; font-size:14px; }
-        th { background:#0d6efd; color:white; }
-    </style>
+/* CARDS */
+.stat-card{
+    background:white;
+    padding:18px;
+    border-radius:12px;
+    text-align:center;
+    box-shadow:0 2px 10px rgba(0,0,0,0.06);
+}
+
+.stat-card h3{
+    font-size:26px;
+    margin:0;
+}
+
+/* BADGES */
+.badge-ok{background:#198754;}
+.badge-empty{background:#fd7e14;}
+.badge-low{background:#ffc107; color:#000;}
+.badge-error{background:#dc3545;}
+.badge-missing{background:#6c757d;}
+
+/* TABLE */
+.table-container{
+    background:white;
+    border-radius:12px;
+    padding:15px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.05);
+}
+
+table{
+    font-size:14px;
+}
+
+tbody tr:hover{
+    background:#f1f5ff;
+}
+
+</style>
 </head>
 
-<body>
+<body class="container py-4">
 
-<h2>🧠 Auditoria Completa do Sistema</h2>
+<!-- HEADER -->
+<div class="header">
+    <h3>🧠 Auditoria Inteligente do ERP</h3>
+    <small>Verificação estrutural de base de dados e integridade do sistema</small>
+</div>
 
-<!-- RESUMO -->
-<div class="grid">
+<!-- STATS -->
+<div class="row g-3 mb-4">
 
-    <div class="card">
-        <h3><?= count($resultados) ?></h3>
-        <p>Tabelas analisadas</p>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <h3><?= $totalTables ?></h3>
+            <small>Tabelas analisadas</small>
+        </div>
     </div>
 
-    <div class="card">
-        <h3><?= count(array_filter($resultados, fn($r)=>$r['status']=='ERROR')) ?></h3>
-        <p>Erros detectados</p>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <h3 class="text-danger"><?= $errors ?></h3>
+            <small>Erros críticos</small>
+        </div>
     </div>
 
-    <div class="card">
-        <h3><?= count(array_filter($resultados, fn($r)=>$r['status']=='EMPTY')) ?></h3>
-        <p>Tabelas vazias</p>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <h3 class="text-warning"><?= $empty ?></h3>
+            <small>Tabelas vazias</small>
+        </div>
     </div>
 
-    <div class="card">
-        <h3><?= count(array_filter($resultados, fn($r)=>$r['status']=='LOW_DATA')) ?></h3>
-        <p>Baixa atividade</p>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <h3 class="text-warning"><?= $low ?></h3>
+            <small>Baixa atividade</small>
+        </div>
     </div>
 
 </div>
 
-<!-- TABELA -->
-<table>
+<!-- TABLE -->
+<div class="table-container">
+
+<table class="table table-hover align-middle">
+<thead class="table-dark">
 <tr>
     <th>Tabela</th>
     <th>Status</th>
-    <th>Total</th>
+    <th>Registos</th>
 </tr>
+</thead>
+
+<tbody>
 
 <?php foreach ($resultados as $r): ?>
+
 <tr>
     <td><?= $r['tabela'] ?></td>
+
     <td>
-        <?php
-        if ($r['status']=='OK') echo "<span class='ok'>OK</span>";
-        if ($r['status']=='EMPTY') echo "<span class='empty'>VAZIA</span>";
-        if ($r['status']=='LOW_DATA') echo "<span class='low'>BAIXA</span>";
-        if ($r['status']=='ERROR') echo "<span class='error'>ERRO</span>";
-        if ($r['status']=='MISSING') echo "<span class='missing'>NÃO EXISTE</span>";
-        ?>
+        <?php if ($r['status']=='OK'): ?>
+            <span class="badge badge-ok">OK</span>
+
+        <?php elseif ($r['status']=='EMPTY'): ?>
+            <span class="badge badge-empty">VAZIA</span>
+
+        <?php elseif ($r['status']=='LOW'): ?>
+            <span class="badge badge-low">BAIXA</span>
+
+        <?php elseif ($r['status']=='ERROR'): ?>
+            <span class="badge badge-error">ERRO</span>
+
+        <?php else: ?>
+            <span class="badge badge-missing">FALTA</span>
+        <?php endif; ?>
     </td>
+
     <td><?= $r['total'] ?></td>
 </tr>
+
 <?php endforeach; ?>
 
+</tbody>
 </table>
+
+</div>
+
+<!-- VOLTAR -->
+<div class="text-center mt-4">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary">
+        ← Voltar
+    </a>
+</div>
 
 </body>
 </html>
