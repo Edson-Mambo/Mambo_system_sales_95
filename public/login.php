@@ -71,7 +71,7 @@ if (isset($_POST['login'])) {
 
                 $_SESSION['abertura_id'] = $abertura_id;
 
-                header("Location: /Mambo_system_sales_95/public/venda.php");
+                header("Location: venda.php");
                 exit;
 
             default:

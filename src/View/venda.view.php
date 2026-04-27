@@ -373,7 +373,7 @@ foreach ($carrinho as $item) {
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#finalizarEmailModal">📧 Finalizar e Enviar por Email</button>
+         <!--<button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#finalizarEmailModal">📧 Finalizar e Enviar por Email</button>-->
         <button type="submit" name="finalizar_venda" class="btn btn-primary">Confirmar</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
       </div>
@@ -381,69 +381,6 @@ foreach ($carrinho as $item) {
   </div>
 </div>
 
-<!-- Modal Cadastrar Cliente -->
-<div class="modal fade" id="modalCadastrarCliente" tabindex="-1" aria-labelledby="modalCadastrarClienteLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <form id="formCadastrarCliente" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalCadastrarClienteLabel">Cadastrar Novo Cliente</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label for="nome_cliente" class="form-label">Nome</label>
-          <input type="text" id="nome_cliente" name="nome_cliente" class="form-control" required>
-        </div>
-        <div class="mb-3">
-          <label for="apelido_cliente" class="form-label">Apelido (opcional)</label>
-          <input type="text" id="apelido_cliente" name="apelido_cliente" class="form-control">
-        </div>
-        <div class="mb-3">
-          <label for="telefone_cliente" class="form-label">Telefone</label>
-          <input type="tel" id="telefone_cliente" name="telefone_cliente" class="form-control" required>
-        </div>
-        <div class="mb-3">
-          <label for="telefone_alt_cliente" class="form-label">Telefone Alternativo (opcional)</label>
-          <input type="tel" id="telefone_alt_cliente" name="telefone_alt_cliente" class="form-control">
-        </div>
-        <div class="mb-3">
-          <label for="email_cliente" class="form-label">Email (opcional)</label>
-          <input type="email" id="email_cliente" name="email_cliente" class="form-control">
-        </div>
-        <div class="mb-3">
-          <label for="morada_cliente" class="form-label">Morada (opcional)</label>
-          <textarea id="morada_cliente" name="morada_cliente" class="form-control" rows="2"></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="submit" class="btn btn-primary">Salvar Cliente</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Modal Buscar Cliente -->
-<div class="modal fade" id="modalBuscarCliente" tabindex="-1" aria-labelledby="modalBuscarClienteLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalBuscarClienteLabel">Buscar Cliente</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-      </div>
-      <div class="modal-body">
-        <form id="formBuscarCliente" class="mb-3 d-flex gap-2">
-          <input type="text" id="buscar_cliente_input" placeholder="Nome ou Telefone" class="form-control" autofocus>
-          <button type="submit" class="btn btn-primary">Buscar</button>
-        </form>
-        <div id="resultado_busca_cliente" style="max-height:300px; overflow-y:auto;"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Modal Finalizar e Enviar por Email -->
 <div class="modal fade" id="finalizarEmailModal" tabindex="-1" aria-labelledby="finalizarEmailLabel" aria-hidden="true">
