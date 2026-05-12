@@ -511,6 +511,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const clienteIdInput = document.getElementById("clienteSelecionadoId");
 
     /* =========================
+   BOTÃO REMOVER → ABRIR MODAL
+========================= */
+document.querySelectorAll(".btn-remover").forEach(btn => {
+    btn.addEventListener("click", function () {
+        const codigo = this.dataset.codigo;
+        abrirModalAutorizacao(codigo);
+    });
+});
+
+    /* =========================
        BUSCAR CLIENTE
     ========================= */
     if (formBuscar) {
@@ -575,6 +585,100 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
         });
     }
+
+    
+// Função para abrir o modal de autorização
+function abrirModalAutorizacao(codigoProduto) {
+    // coloca o código do produto no input hidden
+    document.getElementById('codigoProduto').value = codigoProduto;
+
+    // limpa campos anteriores
+    document.getElementById('senha_autorizacao').value = '';
+    document.getElementById('erro_autorizacao').classList.add('d-none');
+
+    // abre o modal Bootstrap 5
+    const modal = new bootstrap.Modal(document.getElementById('modalAutorizacao'));
+    modal.show();
+}
+
+// Submissão do formulário de autorização
+document.getElementById('formAutorizacao').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const codigo = document.getElementById('codigoProduto').value;
+    const senha = document.getElementById('senha_autorizacao').value;
+    const erroDiv = document.getElementById('erro_autorizacao');
+
+    erroDiv.classList.add('d-none');
+
+    fetch('validar_autorizacao.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ codigo, senha })
+    })
+    .then(async res => {
+        const text = await res.text();
+
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.error("RESPOSTA PHP INVÁLIDA:", text);
+            throw new Error("Resposta do servidor não é JSON");
+        }
+    })
+    .then(data => {
+
+        if (!data.success) {
+            erroDiv.classList.remove('d-none');
+            return;
+        }
+
+        // 🔥 AUTORIZADO → AGORA REMOVE
+        fetch('remover_carrinho.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'codigo=' + encodeURIComponent(codigo)
+        })
+        .then(res => res.json())
+        .then(resp => {
+
+            if (resp.success) {
+
+                // fecha modal
+                const modalEl = document.getElementById('modalAutorizacao');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+
+                // remove linha da tabela (melhor UX)
+                const btn = document.querySelector(`[data-codigo="${codigo}"]`);
+                if (btn) {
+                    const row = btn.closest('tr');
+                    if (row) row.remove();
+                }
+
+                // fallback (garante consistência)
+                setTimeout(() => location.reload(), 300);
+
+            } else {
+                alert(resp.message || "Erro ao remover produto");
+            }
+
+        })
+        .catch(err => {
+            console.error("Erro ao remover:", err);
+            alert("Erro ao remover produto");
+        });
+
+    })
+    .catch(err => {
+        console.error("Erro geral:", err);
+        alert("Erro na comunicação com o servidor");
+    });
+});
 
     /* =========================
        SELECIONAR CLIENTE
@@ -738,7 +842,7 @@ document.getElementById('formEnviarWhatsapp').addEventListener('submit', functio
 });
 </script>
 
-
+<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('formEnviarWhatsapp').addEventListener('submit', function(e) {
   e.preventDefault();
@@ -886,12 +990,12 @@ formVenda?.addEventListener("submit", async (e) => {
     ========================== */
 
     // ✔ Método mais confiável no Chrome / Electron
-    const newWindow = window.open(pdfUrl, "_blank");
+   // const newWindow = window.open(pdfUrl, "_blank");
 
     // fallback caso popup bloqueado
-    if (!newWindow || newWindow.closed || typeof newWindow.closed === "undefined") {
+    //if (!newWindow || newWindow.closed || typeof newWindow.closed === "undefined") {
       window.location.href = pdfUrl;
-    }
+   // }
 
     /* reset sistema */
     setTimeout(() => {

@@ -1,26 +1,33 @@
 <?php
-// Ativa exibição de erros
+// =========================
+// ERROS (DEV ONLY)
+// =========================
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
- 
 
+// =========================
+// DEPENDÊNCIAS (ERP SAFE)
+// =========================
+require_once __DIR__ . '/../config/database.php';
 
-// Inicia sessão e verifica se o usuário é admin (opcional)
+$helperPath = __DIR__ . '/../helpers/voltar_menu.php';
+if (file_exists($helperPath)) {
+    require_once $helperPath;
+}
 
-
-require_once '../config/database.php';
-include 'helpers/voltar_menu.php'; 
-
-// Criar a conexão PDO
+// =========================
+// PDO
+// =========================
 $pdo = Database::conectar();
 
-// Verifica se a conexão foi bem-sucedida
 if (!$pdo) {
     die("Erro ao conectar ao banco de dados.");
 }
 
-// Executar a consulta com JOIN
+// =========================
+// QUERY LOGS
+// =========================
 try {
     $sql = "
         SELECT l.*, u.nome 
@@ -28,8 +35,10 @@ try {
         JOIN usuarios u ON l.usuario_id = u.id 
         ORDER BY l.login_time DESC
     ";
+
     $stmt = $pdo->query($sql);
     $logins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
     die("Erro na consulta: " . $e->getMessage());
 }
@@ -42,53 +51,65 @@ try {
     <title>Relatório de Logins</title>
     <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body class="container mt-5">
-    <h2 class="mb-4">Relatório de Logins</h2>
 
-    <div class="text-center mt-4">
-            <a href="voltar.php" class="btn btn-secondary">← Voltar ao Painel</a>
-        </div>
-<br>
+    <h2 class="mb-4">📊 Relatório de Logins</h2>
 
-    <?php if (count($logins) > 0): ?>
-    <table class="table table-bordered table-striped">
-        <thead class="table-dark">
-            <tr>
-                <th>Usuário</th>
-                <th>Login</th>
-                <th>Logout</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($logins as $log): ?>
-            <tr>
-                <td><?= htmlspecialchars($log['nome']) ?></td>
-                <td><?= htmlspecialchars($log['login_time']) ?></td>
-                <td><?= $log['logout_time'] ? htmlspecialchars($log['logout_time']) : '—' ?></td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+    <!-- BOTÃO VOLTAR ERP (CORRIGIDO) -->
+    <div class="mb-3">
+        <a href="<?= htmlspecialchars($_SERVER['HTTP_REFERER'] ?? '../public/index.php') ?>"
+           class="btn btn-secondary">
+            ← Voltar ao Painel
+        </a>
+    </div>
+
+    <!-- TABELA -->
+    <?php if (!empty($logins)): ?>
+
+        <table class="table table-bordered table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>Usuário</th>
+                    <th>Login</th>
+                    <th>Logout</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <?php foreach ($logins as $log): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($log['nome']) ?></td>
+                        <td><?= htmlspecialchars($log['login_time']) ?></td>
+                        <td>
+                            <?= !empty($log['logout_time'])
+                                ? htmlspecialchars($log['logout_time'])
+                                : '—' ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+
     <?php else: ?>
-        <div class="alert alert-warning">Nenhum registro de login encontrado.</div>
+        <div class="alert alert-warning">
+            Nenhum registro de login encontrado.
+        </div>
     <?php endif; ?>
 
-    <script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 </body>
+
 <script>
 function loadAlerts() {
     fetch('/api/alerts.php')
         .then(r => r.json())
         .then(data => {
             console.log(data);
-
-            // aqui atualizas UI (badge, modal, toast)
         });
 }
 
-// cada 10 segundos
 setInterval(loadAlerts, 10000);
-
 loadAlerts();
 </script>
+
 </html>

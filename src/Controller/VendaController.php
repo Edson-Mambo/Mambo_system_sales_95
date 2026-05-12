@@ -134,104 +134,144 @@ class VendaController
     }
 
     public function finalizarVenda(float $valorPago, string $metodo): array
-    {
-        $carrinho = $_SESSION['carrinho'];
+{
+    $carrinho = $_SESSION['carrinho'] ?? [];
 
-        if (!$carrinho) {
-            return ['success' => false, 'mensagem' => 'Carrinho vazio'];
-        }
+    if (!$carrinho) {
+        return [
+            'success' => false,
+            'mensagem' => 'Carrinho vazio'
+        ];
+    }
 
-        $total = 0;
+    $subtotal = 0;
 
+    foreach ($carrinho as $item) {
+        $subtotal += $item['preco'] * $item['quantidade'];
+    }
+
+    /* =========================
+       DESCONTO COLABORADOR
+    ========================= */
+    $descontoPercentual = 0;
+    $valorDesconto = 0;
+
+    if (!empty($_POST['desconto_colaborador'])) {
+        $descontoPercentual = 10;
+        $valorDesconto = ($subtotal * $descontoPercentual) / 100;
+    }
+
+    $total = $subtotal - $valorDesconto;
+
+    if ($valorPago < $total) {
+        return [
+            'success' => false,
+            'mensagem' => 'Valor insuficiente'
+        ];
+    }
+
+    try {
+        $this->pdo->beginTransaction();
+
+        $clienteId = $_SESSION['cliente_id'] ?? null;
+        $usuarioId = $_SESSION['usuario_id'] ?? null;
+        $aberturaId = $_SESSION['abertura_id'] ?? null;
+
+        /* =========================
+           RECIBO POR CAIXA
+        ========================= */
+        $numeroRecibo = $this->gerarNumeroRecibo($aberturaId);
+
+        /* =========================
+           INSERIR VENDA
+        ========================= */
+        $stmt = $this->pdo->prepare("
+            INSERT INTO vendas (
+                usuario_id,
+                cliente_id,
+                subtotal,
+                desconto,
+                total,
+                valor_pago,
+                troco,
+                metodo_pagamento,
+                data_venda,
+                numero_recibo,
+                abertura_id
+            )
+            VALUES (?,?,?,?,?,?,?,?,NOW(),?,?)
+        ");
+
+        $stmt->execute([
+            $usuarioId,
+            $clienteId,
+            $subtotal,
+            $valorDesconto,
+            $total,
+            $valorPago,
+            $valorPago - $total,
+            $metodo,
+            $numeroRecibo,
+            $aberturaId
+        ]);
+
+        $vendaId = $this->pdo->lastInsertId();
+
+        /* =========================
+           ITENS DA VENDA
+        ========================= */
         foreach ($carrinho as $item) {
-            $total += $item['preco'] * $item['quantidade'];
-        }
 
-        if ($valorPago < $total) {
-            return ['success' => false, 'mensagem' => 'Valor insuficiente'];
-        }
-
-        try {
-            $this->pdo->beginTransaction();
-
-            $clienteId = $_SESSION['cliente_id'] ?? null;
-            $usuarioId = $_SESSION['usuario_id'] ?? null;
-            $aberturaId = $_SESSION['abertura_id'] ?? null;
-
-            /* =========================
-               RECIBO POR CAIXA
-            ========================= */
-            $numeroRecibo = $this->gerarNumeroRecibo($aberturaId);
-
-            /* =========================
-               INSERIR VENDA
-            ========================= */
-            $stmt = $this->pdo->prepare("
-                INSERT INTO vendas
-                (usuario_id, cliente_id, total, valor_pago, troco, metodo_pagamento, data_venda, numero_recibo, abertura_id)
-                VALUES (?,?,?,?,?,?,NOW(),?,?)
-            ");
-
-            $stmt->execute([
-                $usuarioId,
-                $clienteId,
-                $total,
-                $valorPago,
-                $valorPago - $total,
-                $metodo,
-                $numeroRecibo,
-                $aberturaId
+            $this->pdo->prepare("
+                INSERT INTO produtos_vendidos
+                (venda_id, produto_id, quantidade, preco_unitario)
+                VALUES (?,?,?,?)
+            ")->execute([
+                $vendaId,
+                $item['produto_id'],
+                $item['quantidade'],
+                $item['preco']
             ]);
 
-            $vendaId = $this->pdo->lastInsertId();
+            $this->pdo->prepare("
+                UPDATE produtos
+                SET estoque = estoque - ?
+                WHERE id = ?
+            ")->execute([
+                $item['quantidade'],
+                $item['produto_id']
+            ]);
+        }
+
+        $this->pdo->commit();
+
+        /* =========================
+           LIMPEZA DE SESSÃO
+        ========================= */
+        unset($_SESSION['carrinho']);
+        $_SESSION['numero_recibo'] = $numeroRecibo;
+        $_SESSION['print_last_sale'] = $vendaId;
+
+        return [
+            'success' => true,
+            'mensagem' => 'Venda finalizada com sucesso',
+            'venda_id' => $vendaId,
+            'numero_recibo' => $numeroRecibo,
 
             /* =========================
-               ITENS
+               DOWNLOAD / IMPRESSÃO PDF
             ========================= */
-            foreach ($carrinho as $item) {
+            'pdf_url' => "gerar_recibo.php?venda_id=$vendaId"
+        ];
 
-                $this->pdo->prepare("
-                    INSERT INTO produtos_vendidos
-                    (venda_id, produto_id, quantidade, preco_unitario)
-                    VALUES (?,?,?,?)
-                ")->execute([
-                    $vendaId,
-                    $item['produto_id'],
-                    $item['quantidade'],
-                    $item['preco']
-                ]);
+    } catch (\Throwable $e) {
 
-                $this->pdo->prepare("
-                    UPDATE produtos
-                    SET estoque = estoque - ?
-                    WHERE id = ?
-                ")->execute([
-                    $item['quantidade'],
-                    $item['produto_id']
-                ]);
-            }
+        $this->pdo->rollBack();
 
-            $this->pdo->commit();
-
-            $_SESSION['carrinho'] = [];
-            $_SESSION['numero_recibo'] = $numeroRecibo;
-            $_SESSION['print_last_sale'] = $vendaId;
-
-            return [
-                'success' => true,
-                'venda_id' => $vendaId,
-                'numero_recibo' => $numeroRecibo,
-                'pdf_url' => "gerar_recibo.php?venda_id=$vendaId"
-            ];
-
-        } catch (\Throwable $e) {
-
-            $this->pdo->rollBack();
-
-            return [
-                'success' => false,
-                'mensagem' => $e->getMessage()
-            ];
-        }
+        return [
+            'success' => false,
+            'mensagem' => $e->getMessage()
+        ];
     }
+}
 }

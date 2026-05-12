@@ -44,3 +44,4 @@ class ImpressoraFactory
         throw new Exception("Tipo de impressora inválido");
     }
 }
+

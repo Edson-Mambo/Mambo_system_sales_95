@@ -8,13 +8,33 @@ use Dompdf\Dompdf;
 
 $pdo = Database::conectar();
 
+/* =========================
+   EMPRESA (ROBUSTO ERP)
+========================= */
+$stmt = $pdo->query("SELECT * FROM configuracoes_empresa LIMIT 1");
+$config = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : [];
+
+$config = array_merge([
+    'nome_empresa'  => $config['nome_empresa'] ?? 'EMPRESA',
+    'rua_avenida'   => $config['rua_avenida'] ?? '',
+    'bairro'        => $config['bairro'] ?? '',
+    'cidade'        => $config['cidade'] ?? '',
+    'provincia'     => $config['provincia'] ?? '',
+    'telefone'      => $config['telefone'] ?? '',
+    'email_empresa' => $config['email_empresa'] ?? '',
+    'nuit_empresa'  => $config['nuit_empresa'] ?? ''
+], []);
+
+/* =========================
+   VARIÁVEIS
+========================= */
 $tipo = $_GET['tipo'] ?? $_POST['tipo'] ?? 'factura';
 $venda_id = $_GET['venda_id'] ?? $_POST['venda_id'] ?? null;
 $venda = null;
 
-// =========================
-// BUSCA VENDA
-// =========================
+/* =========================
+   BUSCAR VENDA
+========================= */
 if ($venda_id) {
     $stmt = $pdo->prepare("SELECT * FROM vendas WHERE id = ?");
     $stmt->execute([$venda_id]);
@@ -22,7 +42,7 @@ if ($venda_id) {
 }
 
 /* =========================
-   GERAR DOCUMENTO ERP
+   GERAR FACTURA
 ========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
 
@@ -32,7 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
     $contacto = trim($_POST['contacto']);
     $email = trim($_POST['email']);
 
-    // salvar factura
+    /* =========================
+       INSERIR FACTURA
+    ========================= */
     $stmt = $pdo->prepare("
         INSERT INTO facturas 
         (venda_id, tipo, empresa_nome, nuit, morada, contacto, email)
@@ -51,9 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
 
     $factura_id = $pdo->lastInsertId();
 
-    // =========================
-    // PRODUTOS
-    // =========================
+    /* =========================
+       PRODUTOS
+    ========================= */
     $stmt = $pdo->prepare("
         SELECT pv.*, p.nome AS nome_produto
         FROM produtos_vendidos pv
@@ -63,9 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
     $stmt->execute([$venda_id]);
     $produtos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // =========================
-    // PDF ERP
-    // =========================
+    /* =========================
+       PDF
+    ========================= */
     $dompdf = new Dompdf();
     ob_start();
 ?>
@@ -75,56 +97,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gerar_factura'])) {
 <head>
 <meta charset="UTF-8">
 <style>
-body { font-family: Arial; font-size: 12px; color: #333; }
+body { font-family: Arial; font-size: 12px; }
 
-.header {
-    display:flex;
-    justify-content:space-between;
-    border-bottom:2px solid #0d6efd;
-    padding-bottom:10px;
-}
+.header { text-align:center; border-bottom:2px solid #0d6efd; padding-bottom:10px; }
 
-h1 { color:#0d6efd; font-size:20px; }
+h1 { color:#0d6efd; margin:0; }
 
-table {
-    width:100%;
-    border-collapse:collapse;
-    margin-top:15px;
-}
+table { width:100%; border-collapse:collapse; margin-top:15px; }
 
-th {
-    background:#0d6efd;
-    color:white;
-    padding:8px;
-}
+th { background:#0d6efd; color:#fff; padding:8px; }
 
-td {
-    border:1px solid #ddd;
-    padding:8px;
-}
+td { border:1px solid #ddd; padding:6px; }
 
-.footer {
-    margin-top:20px;
-    font-style:italic;
-    text-align:center;
-}
+.footer { text-align:center; margin-top:20px; font-style:italic; }
 </style>
 </head>
 
 <body>
 
 <div class="header">
-    <div>
-        <h1>Mambo System Sales</h1>
-        <p>Maputo • Moçambique</p>
-    </div>
-
-    <div>
-        <strong>Factura #<?= $factura_id ?></strong><br>
-        Tipo: <?= ucfirst($tipo) ?><br>
-        Data: <?= date('d/m/Y H:i') ?>
-    </div>
+    <h1><?= htmlspecialchars($config['nome_empresa']) ?></h1>
+    <small>
+        <?= $config['rua_avenida'] ?>, <?= $config['bairro'] ?>,
+        <?= $config['cidade'] ?> - <?= $config['provincia'] ?><br>
+        Tel: <?= $config['telefone'] ?> |
+        Email: <?= $config['email_empresa'] ?><br>
+        NUIT: <?= $config['nuit_empresa'] ?>
+    </small>
 </div>
+
+<hr>
+
+<h3>Factura #<?= $factura_id ?></h3>
+
+<p>
+<strong>Tipo:</strong> <?= ucfirst($tipo) ?><br>
+<strong>Data:</strong> <?= date('d/m/Y H:i') ?>
+</p>
 
 <hr>
 
@@ -140,10 +149,10 @@ Email: <?= htmlspecialchars($email) ?>
 <table>
 <thead>
 <tr>
-    <th>Produto</th>
-    <th>Qtd</th>
-    <th>Preço</th>
-    <th>Total</th>
+<th>Produto</th>
+<th>Qtd</th>
+<th>Preço</th>
+<th>Total</th>
 </tr>
 </thead>
 
@@ -151,19 +160,16 @@ Email: <?= htmlspecialchars($email) ?>
 
 <?php
 $subtotal = 0;
-
 foreach ($produtos as $p):
-    $totalLinha = $p['quantidade'] * $p['preco_unitario'];
-    $subtotal += $totalLinha;
+$totalLinha = $p['quantidade'] * $p['preco_unitario'];
+$subtotal += $totalLinha;
 ?>
-
 <tr>
-    <td><?= htmlspecialchars($p['nome_produto']) ?></td>
-    <td><?= $p['quantidade'] ?></td>
-    <td><?= number_format($p['preco_unitario'], 2, ',', '.') ?></td>
-    <td><?= number_format($totalLinha, 2, ',', '.') ?></td>
+<td><?= htmlspecialchars($p['nome_produto']) ?></td>
+<td><?= $p['quantidade'] ?></td>
+<td><?= number_format($p['preco_unitario'], 2, ',', '.') ?></td>
+<td><?= number_format($totalLinha, 2, ',', '.') ?></td>
 </tr>
-
 <?php endforeach; ?>
 
 <?php
@@ -172,25 +178,25 @@ $total = $subtotal + $iva;
 ?>
 
 <tr>
-    <td colspan="3"><strong>Subtotal</strong></td>
-    <td><?= number_format($subtotal, 2, ',', '.') ?></td>
+<td colspan="3" style="text-align:right;"><strong>Subtotal</strong></td>
+<td><?= number_format($subtotal, 2, ',', '.') ?></td>
 </tr>
 
 <tr>
-    <td colspan="3"><strong>IVA (17%)</strong></td>
-    <td><?= number_format($iva, 2, ',', '.') ?></td>
+<td colspan="3" style="text-align:right;"><strong>IVA (17%)</strong></td>
+<td><?= number_format($iva, 2, ',', '.') ?></td>
 </tr>
 
 <tr>
-    <td colspan="3"><strong>Total</strong></td>
-    <td><strong><?= number_format($total, 2, ',', '.') ?></strong></td>
+<td colspan="3" style="text-align:right;"><strong>Total</strong></td>
+<td><strong><?= number_format($total, 2, ',', '.') ?></strong></td>
 </tr>
 
 </tbody>
 </table>
 
 <div class="footer">
-Obrigado por escolher o Mambo System 
+Obrigado por escolher o Mambo System ERP
 </div>
 
 </body>
@@ -203,13 +209,51 @@ $dompdf->loadHtml($html);
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
 
+/* =========================
+   SALVAR PDF (IGUAL COTAÇÃO)
+========================= */
 $pdfDir = __DIR__ . '/../../public/pdf/facturas/';
-if (!is_dir($pdfDir)) mkdir($pdfDir, 0777, true);
 
-file_put_contents($pdfDir . "factura_$factura_id.pdf", $dompdf->output());
+if (!is_dir($pdfDir)) {
+    mkdir($pdfDir, 0777, true);
+}
 
-echo "<div class='alert alert-success'>✔ Documento gerado com sucesso</div>";
+file_put_contents($pdfDir . "factura_{$factura_id}.pdf", $dompdf->output());
+
+/* =========================
+   LIMPAR SESSÃO (IGUAL COTAÇÃO)
+========================= */
+$_SESSION['factura'] = [];
+
+/* =========================
+   BOTÕES FINAIS (IGUAL COTAÇÃO)
+========================= */
+
+echo "<div class='alert alert-success'>✔ Factura gerada com sucesso!</div>";
+
+echo "<div class='d-flex gap-2 mt-2'>";
+
+/* PDF */
+echo "<a href='../public/pdf/facturas/factura_{$factura_id}.pdf' target='_blank' class='btn btn-primary'>
+        🖨️ Abrir PDF
+      </a>";
+
+/* EMAIL */
+echo "<a href='../public/enviar_documento.php?tipo=factura&factura_id={$factura_id}' class='btn btn-secondary'>
+        ✉️ Enviar Email
+      </a>";
+
+/* VOLTAR */
+echo "<a href='../public/venda.php' class='btn btn-outline-dark'>
+        ← Voltar
+      </a>";
+
+echo "</div>";
+
 exit;
+
+} else {
+    echo "<div class='alert alert-warning'>Adicione produtos primeiro.</div>";
 }
 ?>
 
@@ -217,62 +261,36 @@ exit;
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<title>ERP - Facturação</title>
-
+<title>Factura </title>
 <link href="../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet">
-
-<style>
-body { background:#f4f6f9; }
-
-.hero {
-    background:#0d6efd;
-    color:white;
-    padding:20px;
-    border-radius:10px;
-    margin-bottom:20px;
-}
-
-.card {
-    border-radius:12px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-}
-</style>
 </head>
 
 <body class="container mt-4">
 
-<!-- HERO ERP -->
-<div class="hero">
-    <h3>📄 Facturação Inteligente</h3>
-    <p>Emissão automática de facturas e controlo de vendas em tempo real no Mambo System 95</p>
-</div>
+<h4><?= htmlspecialchars($config['nome_empresa']) ?> | Facturação ERP</h4>
+
+<!-- VOLTAR (ANTES) -->
+<a href="../public/venda.php" class="btn btn-outline-secondary mb-3">
+← Voltar
+</a>
 
 <!-- BUSCA -->
-<div class="card mb-4 p-3">
-<form method="GET" class="row g-2">
-
-    <div class="col-md-6">
-        <input type="text" name="venda_id" class="form-control" placeholder="Número da venda">
-    </div>
-
-    <div class="col-md-2">
-        <button class="btn btn-primary w-100">Buscar</button>
-    </div>
-
-</form>
+<form method="GET" class="row g-2 mb-3">
+<div class="col-md-6">
+<input type="text" name="venda_id" class="form-control" placeholder="ID venda">
 </div>
+<div class="col-md-2">
+<button class="btn btn-primary w-100">Buscar</button>
+</div>
+</form>
 
-<!-- RESULTADO -->
 <?php if ($venda): ?>
 
-<div class="card p-3 mb-4">
-
+<div class="card p-3 mb-3">
 <h5>Venda #<?= $venda['id'] ?></h5>
 <p>Total: MZN <?= number_format($venda['total'], 2, ',', '.') ?></p>
-
 </div>
 
-<!-- FORM CLIENTE -->
 <div class="card p-3">
 
 <form method="POST" class="row g-2">
@@ -285,24 +303,24 @@ body { background:#f4f6f9; }
 </div>
 
 <div class="col-md-6">
-<input class="form-control" name="nuit" placeholder="NUIT" required>
+<input class="form-control" name="nuit" placeholder="NUIT">
 </div>
 
 <div class="col-md-6">
-<input class="form-control" name="morada" placeholder="Morada" required>
+<input class="form-control" name="morada" placeholder="Morada">
 </div>
 
 <div class="col-md-6">
-<input class="form-control" name="contacto" placeholder="Contacto" required>
+<input class="form-control" name="contacto" placeholder="Contacto">
 </div>
 
 <div class="col-md-6">
-<input class="form-control" name="email" placeholder="Email" required>
+<input class="form-control" name="email" placeholder="Email">
 </div>
 
 <div class="col-12">
 <button class="btn btn-success w-100" name="gerar_factura">
-Gerar Documento 
+Gerar Documento
 </button>
 </div>
 
@@ -311,27 +329,6 @@ Gerar Documento
 </div>
 
 <?php endif; ?>
-
-<!-- VOLTAR ERP -->
-<?php
-$nivel = $_SESSION['nivel'] ?? $_SESSION['nivel_acesso'] ?? 'caixa';
-
-$voltar = match ($nivel) {
-    'admin', 'gerente' => '../public/index_admin.php', // ou dashboard principal ERP
-    'supervisor'       => '../public/index_supervisor.php',
-    'store'            => '../public/venda.php',
-    'teka_away'        => '../public/venda_teka_away.php',
-    default            => '../public/venda.php'
-};
-?>
-
-<div class="text-center mt-4">
-    <a href="<?= htmlspecialchars($voltar) ?>" class="btn btn-outline-secondary px-4">
-        ← Voltar ao Painel
-    </a>
-</div>
-
-<script src="../bootstrap/bootstrap-5.3.3/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>

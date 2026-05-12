@@ -130,7 +130,16 @@ try {
     $mail->SMTPAuth = true;
     $mail->Username = $config['smtp_email'];
     $mail->Password = $config['smtp_senha'];
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+
+    $mail->CharSet = 'UTF-8';
+
+    /* SMTP seguro (evita falhas ocultas) */
+    if (!empty($config['smtp_port']) && $config['smtp_port'] == 465) {
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+    } else {
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    }
+
     $mail->Port = $config['smtp_port'];
 
     $mail->setFrom(
@@ -140,48 +149,55 @@ try {
 
     $mail->addAddress($email);
 
-    $mail->Subject = ucfirst($tipo)
-        . " #{$id} - "
-        . $config['nome_empresa'];
-
+    $mail->Subject = ucfirst($tipo) . " #{$id} - " . $config['nome_empresa'];
     $mail->Body = $mensagem;
+
+    /* valida PDF antes de anexar */
+    if (!file_exists($pdfPathAbsoluto)) {
+        throw new Exception("PDF não encontrado: " . $pdfPathAbsoluto);
+    }
 
     $mail->addAttachment($pdfPathAbsoluto);
 
     $mail->send();
 
+    /* =========================
+       SUCESSO
+    ========================= */
     echo "
     <div class='alert alert-success mt-3'>
-        ✅ " . ucfirst($tipo) . " enviada para 
-        <strong>{$email}</strong> com sucesso!
+        ✅ " . ucfirst($tipo) . " enviada para <strong>{$email}</strong> com sucesso!
     </div>
+
+    <div class='d-flex gap-2 mt-2'>
     ";
 
-    echo "
-    <a href='../public/imprimir_{$tipo}.php?{$tipo}_id={$id}' 
-       class='btn btn-success mt-2'>
-       🖨️ Imprimir
-    </a>
-    ";
+    $base = '/public';
 
     echo "
-    <a href='{$voltar}' 
-       class='btn btn-secondary mt-2'>
-       ⬅️ Voltar
-    </a>
+        <a href='{$base}/imprimir.php?tipo={$tipo}&id={$id}' 
+           class='btn btn-success'>
+           🖨️ Imprimir
+        </a>
+
+        <a href='{$voltar}' 
+           class='btn btn-secondary'>
+           ⬅️ Voltar
+        </a>
+    </div>
     ";
 
 } catch (Exception $e) {
 
     echo "
     <div class='alert alert-danger mt-3'>
-        ❌ Erro ao enviar o e-mail: {$mail->ErrorInfo}
+        ❌ Erro ao enviar o e-mail: " . htmlspecialchars($mail->ErrorInfo ?? $e->getMessage()) . "
     </div>
-    ";
 
-    echo "
-    <a href='{$voltar}' class='btn btn-secondary mt-2'>
-        ⬅️ Voltar
-    </a>
+    <div class='d-flex gap-2 mt-2'>
+        <a href='{$voltar}' class='btn btn-secondary'>
+            ⬅️ Voltar
+        </a>
+    </div>
     ";
 }
