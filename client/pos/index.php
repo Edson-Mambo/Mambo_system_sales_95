@@ -496,29 +496,41 @@ function calcularTotal() {
 /* =========================
    EVENTOS
 ========================= */
-document.getElementById("valor_pago").addEventListener("input", calcularTotal);
-document.getElementById("desconto_colaborador").addEventListener("change", calcularTotal);
+const valorPago = document.getElementById("valor_pago");
+const descontoColaborador = document.getElementById("desconto_colaborador");
+const formFinalizarVenda = document.getElementById("formFinalizarVenda");
 
-/* =========================
-   REMOVER ITEM
-========================= */
-document.querySelectorAll(".btn-remover").forEach(btn => {
-    btn.addEventListener("click", function () {
+if (valorPago) {
+    valorPago.addEventListener("input", calcularTotal);
+}
 
-        const codigo = this.getAttribute("data-codigo");
+if (descontoColaborador) {
+    descontoColaborador.addEventListener("change", calcularTotal);
+}
 
-        fetch("ajax/remover_item.php", {
+if (formFinalizarVenda) {
+    formFinalizarVenda.addEventListener("submit", function(e){
+        e.preventDefault();
+
+        const data = {
+            valor_pago: valorPago.value,
+            desconto: descontoColaborador.checked
+        };
+
+        fetch("ajax/finalizar_venda.php", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({codigo})
+            body: JSON.stringify(data)
         })
         .then(res => res.json())
-        .then(data => {
-            if (data.success) location.reload();
+        .then(res => {
+            if (res.success) {
+                alert("Venda finalizada!");
+                window.location.reload();
+            }
         });
-
     });
-});
+}
 
 /* =========================
    FINALIZAR VENDA
@@ -586,20 +598,13 @@ document.getElementById("busca_produto").addEventListener("input", function () {
             document.getElementById("resultado_produtos").innerHTML = html;
         });
 });
-
-window.selecionarProduto = function(codigoBarra) {
-
+function selecionarProduto(codigoBarra) {
     const campo = document.getElementById("busca_produto");
     const resultado = document.getElementById("resultado_produtos");
 
-    if (campo) {
-        campo.value = codigoBarra;
-    }
-
-    if (resultado) {
-        resultado.innerHTML = "";
-    }
-};
+    if (campo) campo.value = codigoBarra;
+    if (resultado) resultado.innerHTML = "";
+}
 
 /* =========================
    BUSCAR CLIENTE
