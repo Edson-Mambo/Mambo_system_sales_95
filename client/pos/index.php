@@ -1,4 +1,5 @@
 <?php
+
 /* =========================
    BOOTSTRAP DO SISTEMA
 ========================= */
@@ -11,24 +12,26 @@ require_once __DIR__ . '/../../config/database.php';
 /* =========================
    AUTENTICAÇÃO
 ========================= */
-if (!isset($_SESSION['usuario_id'])) {
-    header("Location: /Mambo_system_sales_95/auth/login.php");
+
+if (empty($_SESSION['usuario_id'])) {
+    header("Location: /Mambo_system_sales_95/client/auth/login.php");
     exit;
 }
 
 $nivel = strtolower(trim($_SESSION['nivel'] ?? ''));
 
 if ($nivel !== 'caixa') {
-    header("Location: /Mambo_system_sales_95/auth/login.php?erro=acesso");
+    header("Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso");
     exit;
 }
 
 /* =========================
    CAIXA ABERTA
 ========================= */
+
 $abertura_id = $_SESSION['abertura_id'] ?? null;
 
-if (!$abertura_id) {
+if (empty($abertura_id)) {
     header("Location: /Mambo_system_sales_95/pos/abrir_caixa.php");
     exit;
 }
@@ -38,7 +41,8 @@ $pdo = Database::conectar();
 $stmt = $pdo->prepare("
     SELECT id 
     FROM abertura_caixa 
-    WHERE id = ? AND status = 'aberto'
+    WHERE id = ? 
+    AND status = 'aberto'
 ");
 $stmt->execute([(int)$abertura_id]);
 
@@ -49,12 +53,12 @@ if (!$stmt->fetch()) {
 }
 
 /* =========================
-   DADOS DO USUÁRIO
+   USUÁRIO
 ========================= */
 $usuario_nome = $_SESSION['nome'] ?? 'Caixa';
 
 /* =========================
-   CLIENTE
+   CLIENTE SELECIONADO
 ========================= */
 $clienteSelecionado = [
     'id' => null,
@@ -67,7 +71,12 @@ $clienteSelecionado = [
 
 if (!empty($_SESSION['cliente_id'])) {
 
-    $stmt = $pdo->prepare("SELECT * FROM clientes WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("
+        SELECT id, nome, apelido, telefone, email, morada, nuit
+        FROM clientes
+        WHERE id = ?
+        LIMIT 1
+    ");
     $stmt->execute([$_SESSION['cliente_id']]);
     $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -86,25 +95,27 @@ if (!empty($_SESSION['cliente_id'])) {
 /* =========================
    VENDA
 ========================= */
+
 $id_venda = isset($_GET['id_venda']) ? (int)$_GET['id_venda'] : 0;
 
 $venda = null;
+
 if ($id_venda > 0) {
     $stmt = $pdo->prepare("SELECT * FROM vendas WHERE id = ?");
     $stmt->execute([$id_venda]);
     $venda = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-
 /* =========================
-   PROCESSAR ADIÇÃO PRODUTO
+   ADICIONAR PRODUTO AO CARRINHO
 ========================= */
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar'])) {
 
     $produto_busca = trim($_POST['produto_busca'] ?? '');
-    $quantidade = intval($_POST['quantidade'] ?? 1);
+    $quantidade = max(1, (int)($_POST['quantidade'] ?? 1));
 
-    if ($produto_busca !== '' && $quantidade > 0) {
+    if ($produto_busca !== '') {
 
         $stmt = $pdo->prepare("
             SELECT id, nome, codigo_barra, preco, estoque
@@ -123,7 +134,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar'])) {
 
         if ($produto) {
 
-            if (!isset($_SESSION['carrinho'])) {
+            // VERIFICAR ESTOQUE
+            if ($produto['estoque'] < $quantidade) {
+                $_SESSION['erro'] = "Estoque insuficiente para este produto.";
+                header("Location: index.php");
+                exit;
+            }
+
+            if (!isset($_SESSION['carrinho']) || !is_array($_SESSION['carrinho'])) {
                 $_SESSION['carrinho'] = [];
             }
 
@@ -147,11 +165,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar'])) {
     exit;
 }
 
-
 /* =========================
    CARRINHO
 ========================= */
+
 $carrinho = $_SESSION['carrinho'] ?? [];
+
+if (!is_array($carrinho)) {
+    $carrinho = [];
+}
 
 $total = 0;
 
@@ -162,7 +184,9 @@ foreach ($carrinho as $item) {
 /* =========================
    RECIBO
 ========================= */
-$numero_recibo = $numero_recibo ?? ('REC-' . time());
+
+$numero_recibo = 'REC-' . time();
+
 ?>
 
 <!DOCTYPE html>

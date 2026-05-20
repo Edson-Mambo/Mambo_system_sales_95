@@ -8,7 +8,7 @@ function verificarLogin()
 {
     if (!isset($_SESSION['usuario_id'])) {
 
-        header("Location: /client/auth/login.php");
+      header("Location: /Mambo_system_sales_95/client/auth/login.php");
         exit;
     }
 }
@@ -17,7 +17,7 @@ function verificarCaixa()
 {
     verificarLogin();
 
-    if (($_SESSION['nivel_acesso'] ?? '') !== 'caixa') {
+    if (($_SESSION['nivel'] ?? '') !== 'caixa') {
         die("Acesso negado");
     }
 }

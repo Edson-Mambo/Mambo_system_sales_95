@@ -9,7 +9,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $senha = trim($_POST['senha'] ?? '');
 
     if ($email === '' || $senha === '') {
+
         $erro = "Preencha email e senha";
+
     } else {
 
         $apiUrl = "http://localhost/Mambo_system_sales_95/server/api/login.php";
@@ -33,16 +35,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
+
         curl_close($ch);
 
         if ($response === false) {
-            $erro = "Erro de ligação com o servidor";
+
+            $erro = "Erro de ligação: " . $curlError;
+
         } else {
 
             $res = json_decode($response, true);
 
             if (!is_array($res)) {
+
                 $erro = "Resposta inválida do servidor";
+
             } elseif (($res['status'] ?? '') === 'success') {
 
                 session_regenerate_id(true);
@@ -50,14 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['usuario_id'] = $res['usuario']['id'];
                 $_SESSION['nome'] = $res['usuario']['nome'];
                 $_SESSION['nivel'] = $res['usuario']['nivel'];
-
-                // ⚠️ temporário (depois liga ao caixa real)
                 $_SESSION['caixa_id'] = 1;
 
-                header("Location: ../pos/index.php");
+                header("Location: /Mambo_system_sales_95/pos/index.php");
                 exit;
 
             } else {
+
                 $erro = $res['mensagem'] ?? 'Login inválido';
             }
         }
@@ -70,5 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <input name="senha" type="password" placeholder="Senha" required><br>
     <button type="submit">Entrar</button>
 
-    <?php if (!empty($erro)) echo "<p style='color:red;'>$erro</p>"; ?>
+    <?php if (!empty($erro)): ?>
+        <p style="color:red;">
+            <?= htmlspecialchars($erro) ?>
+        </p>
+    <?php endif; ?>
 </form>
