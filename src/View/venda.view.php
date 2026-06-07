@@ -470,8 +470,6 @@ foreach ($carrinho as $item) {
 </div>
 
 
-
-
 <!-- Modal -->
 <div class="modal fade" id="enviarReciboModal" tabindex="-1" aria-labelledby="enviarReciboModalLabel" aria-hidden="true">
   <div class="modal-dialog">
@@ -510,7 +508,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const clienteTexto = document.getElementById("clienteSelecionadoTexto");
     const clienteIdInput = document.getElementById("clienteSelecionadoId");
 
-    /* =========================
+/* =========================
    BOTÃO REMOVER → ABRIR MODAL
 ========================= */
 document.querySelectorAll(".btn-remover").forEach(btn => {

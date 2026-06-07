@@ -36,18 +36,41 @@ try {
     ");
 
     /* =========================
-       VENDAS OFFLINE
+       USUÁRIOS OFFLINE
+    ========================= */
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            username TEXT UNIQUE,
+            password TEXT,
+            nivel TEXT DEFAULT 'caixa',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+
+    /* =========================
+       VENDAS OFFLINE (SYNC MELHORADO)
     ========================= */
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            total REAL DEFAULT 0,
-            metodo_pagamento TEXT,
-            cliente_id INTEGER,
             usuario_id INTEGER,
-            data TEXT,
+            cliente_id INTEGER,
+            total REAL DEFAULT 0,
+            metodo_pagamento TEXT DEFAULT 'dinheiro',
+
+            -- estado do negócio (não pagamento)
             status TEXT DEFAULT 'pendente',
-            sync_status TEXT DEFAULT 'pendente'
+
+            -- sincronização offline → server (melhorado)
+            sync_status TEXT DEFAULT 'pending',
+
+            -- controlo extra de sync (NOVO MAS COMPATÍVEL)
+            sync_tentativas INTEGER DEFAULT 0,
+            sync_erro TEXT NULL,
+
+            data TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ");
 
@@ -55,14 +78,13 @@ try {
        ITENS DA VENDA
     ========================= */
     $pdo->exec("
-        CREATE TABLE IF NOT EXISTS itens_venda (
+       CREATE TABLE IF NOT EXISTS venda_itens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER,
-            produto_id INTEGER,
-            nome_produto TEXT,
-            quantidade INTEGER,
-            preco REAL,
-            subtotal REAL
+            venda_id INTEGER NOT NULL,
+            produto_id INTEGER NOT NULL,
+            quantidade REAL DEFAULT 1,
+            preco REAL DEFAULT 0,
+            subtotal REAL DEFAULT 0
         )
     ");
 
@@ -79,15 +101,24 @@ try {
     ");
 
     /* =========================
-       FILA DE SINCRONIZAÇÃO
+       FILA DE SINCRONIZAÇÃO (MELHORADA)
     ========================= */
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS sync_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+
             tipo TEXT,
+
             payload TEXT,
+
             status TEXT DEFAULT 'pending',
+
+            -- controlo de retries
             tentativas INTEGER DEFAULT 0,
+            max_tentativas INTEGER DEFAULT 5,
+
+            erro TEXT NULL,
+
             created_at TEXT,
             updated_at TEXT
         )
@@ -105,7 +136,7 @@ try {
         )
     ");
 
-    echo "SQLite POS estruturado com sucesso.";
+    echo "SQLite POS estruturado com sync robusto.";
 
 } catch (Exception $e) {
     echo "Erro: " . $e->getMessage();

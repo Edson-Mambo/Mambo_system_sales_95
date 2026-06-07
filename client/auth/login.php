@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['nivel'] = $res['usuario']['nivel'];
                 $_SESSION['caixa_id'] = 1;
 
-                header("Location: /Mambo_system_sales_95/pos/index.php");
+                header("Location: /Mambo_system_sales_95/client/pos/index.php");
                 exit;
 
             } else {
@@ -70,11 +70,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>POS - Mambo System</title>
+
+<link href="../../bootstrap/bootstrap-5.3.3/css/bootstrap.min.css" rel="stylesheet" />
+
+<script src="../../bootstrap/bootstrap-5.3.3/js/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</head>
+
+<body class="bg-dark">
+
+<div class="container mt-5">
+<div class="col-md-4 mx-auto">
+
+<div class="card shadow-lg">
+
+<div class="card-header bg-primary text-white text-center">
+<h4>🔐 Mambo System 95</h4>
+</div>
+
+<div class="card-body">
 
 <form method="POST">
-    <input name="email" placeholder="Email" required><br>
-    <input name="senha" type="password" placeholder="Senha" required><br>
-    <button type="submit">Entrar</button>
+    <input name="email" class="form-control" placeholder="Email" required><br>
+    <input name="senha" class="form-control mb-2" type="password" placeholder="Senha" required><br>
+    <button class="btn btn-primary w-100" type="submit">Entrar</button>
 
     <?php if (!empty($erro)): ?>
         <p style="color:red;">
@@ -82,3 +107,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </p>
     <?php endif; ?>
 </form>
+
+</div>
+</div>
+
+</div>
+</div>
+
+</body>
+</html>
