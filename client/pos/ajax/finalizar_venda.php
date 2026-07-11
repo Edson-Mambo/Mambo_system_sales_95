@@ -3,21 +3,95 @@
 ob_start();
 header('Content-Type: application/json; charset=utf-8');
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 require_once __DIR__ . '/../helpers/auth.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../services/VendaService.php';
 require_once __DIR__ . '/../../services/CarrinhoService.php';
+require_once __DIR__ . '/../../services/ReciboImpressaoService.php';
+
+function responder(array $data, int $httpCode = 200): void
+{
+    ob_end_clean();
+    http_response_code($httpCode);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* =========================
+   LOG HELPER
+========================= */
+function logVenda($msg, $data = null)
+{
+    error_log("[VENDA] " . $msg . ($data ? " | " . json_encode($data) : ""));
+}
 
 try {
 
+    /* =========================
+       AUTENTICAÇÃO
+    ========================= */
     verificarCaixa();
 
-    $pdo = Database::conectarLocal();
+    $usuario_id = (int)($_SESSION['usuario_id'] ?? 0);
+
+    if ($usuario_id <= 0) {
+        responder([
+            'success' => false,
+            'message' => 'Sessão inválida ou expirada'
+        ], 401);
+    }
+
+    /* =========================
+       INPUT
+    ========================= */
+    $rawInput = file_get_contents("php://input");
+    $input = json_decode($rawInput, true);
+
+    if (!is_array($input)) {
+        logVenda("JSON inválido", $rawInput);
+        responder([
+            'success' => false,
+            'message' => 'Dados inválidos enviados ao servidor'
+        ], 400);
+    }
+
+    /* =========================
+       NORMALIZAÇÃO DO MÉTODO
+    ========================= */
+    $metodoRaw = $input['metodo_pagamento'] ?? '';
+
+    $metodoPagamento = strtolower(trim($metodoRaw));
+    $metodoPagamento = str_replace([' ', '-', '_'], '', $metodoPagamento);
+
+    $mapaMetodos = [
+        'dinheiro' => 'dinheiro',
+        'mpesa'    => 'mpesa',
+        'm-pesa'   => 'mpesa',
+        'emola'    => 'emola',
+        'emola'    => 'emola',
+        'cartao'   => 'cartao',
+        'cartão'   => 'cartao',
+        'credito'  => 'credito'
+    ];
+
+    if (!isset($mapaMetodos[$metodoPagamento])) {
+        logVenda("Método inválido", $metodoRaw);
+
+        responder([
+            'success' => false,
+            'message' => 'Método de pagamento inválido',
+            'debug'   => [
+                'recebido' => $metodoRaw,
+                'esperado' => array_keys($mapaMetodos)
+            ]
+        ], 422);
+    }
+
+    $metodoPagamento = $mapaMetodos[$metodoPagamento];
 
     /* =========================
        CARRINHO
@@ -25,90 +99,129 @@ try {
     $carrinhoService = new CarrinhoService();
     $carrinho = $carrinhoService->listar();
 
-    if (empty($carrinho)) {
-        ob_clean();
-        echo json_encode([
+    if (!is_array($carrinho) || count($carrinho) === 0) {
+        logVenda("Carrinho vazio");
+
+        responder([
             'success' => false,
-            'message' => 'Carrinho vazio'
-        ]);
-        exit;
-    }
-
-    $total = $carrinhoService->total();
-
-    /* =========================
-       INPUT JSON
-    ========================= */
-    $input = json_decode(file_get_contents("php://input"), true) ?? [];
-
-    /* =========================
-       VALIDAÇÃO MÉTODO PAGAMENTO
-    ========================= */
-    $metodosPermitidos = ['dinheiro', 'm-pesa', 'e-mola', 'cartao'];
-
-    $metodoPagamento = strtolower(trim($input['metodo_pagamento'] ?? 'dinheiro'));
-
-    if (!in_array($metodoPagamento, $metodosPermitidos, true)) {
-        ob_clean();
-        echo json_encode([
-            'success' => false,
-            'message' => 'Método de pagamento inválido',
-            'permitidos' => $metodosPermitidos
-        ]);
-        exit;
+            'message' => 'Carrinho vazio — adicione produtos antes de finalizar'
+        ], 422);
     }
 
     /* =========================
-       DADOS DA VENDA
+       SESSÃO SEGURA
+    ========================= */
+    $cliente_id = $_SESSION['cliente_id'] ?? null;
+    $sessao_id  = $_SESSION['sessao_id'] ?? ($_SESSION['abertura_id'] ?? null);
+
+    /* =========================
+       MONTAR DADOS
     ========================= */
     $dados = [
-        'total' => $total,
-        'metodo_pagamento' => $metodoPagamento,
-        'valor_pago' => $input['valor_pago'] ?? 0,
-        'desconto' => $input['desconto'] ?? false,
-        'itens' => $carrinho
+        'metodo_pagamento'  => $metodoPagamento,
+        'desconto'          => $input['desconto'] ?? false,
+        'valor_pago'        => (float)($input['valor_pago'] ?? 0),
+
+        'numero_referencia' => $input['numero_referencia']
+                               ?? $input['numero_autorizacao']
+                               ?? null,
+
+        'observacao'        => $input['observacao'] ?? null,
+
+        'cliente_id'        => $cliente_id,
+        'sessao_id'         => $sessao_id,
+
+        'itens'             => $carrinho,
     ];
 
+    logVenda("Finalizando venda", [
+        'usuario' => $usuario_id,
+        'metodo'  => $metodoPagamento,
+        'itens'   => count($carrinho)
+    ]);
+
     /* =========================
-       FINALIZAR VENDA
+       EXECUTAR VENDA
     ========================= */
-    $vendaService = new VendaService();
+    $pdoLocal = Database::conectarLocal();
+    $vendaService = new VendaService($pdoLocal);
 
-    $result = $vendaService->finalizar(
-        $dados['itens'],
-        $_SESSION['usuario_id']
-    );
+    $result = $vendaService->finalizar($dados, $usuario_id);
 
-    ob_clean();
+    if (!is_array($result) || empty($result['success'])) {
+        logVenda("Erro no service", $result);
 
-    if (!empty($result['success'])) {
-
-        $carrinhoService->limpar();
-
-        echo json_encode([
-            'success' => true,
-            'venda_id' => $result['venda_id'] ?? null,
-            'total' => $total,
-            'metodo_pagamento' => $metodoPagamento
-        ]);
-
-    } else {
-
-        echo json_encode([
+        responder($result ?: [
             'success' => false,
-            'message' => $result['message'] ?? 'Erro ao finalizar venda'
-        ]);
+            'message' => 'Erro ao processar venda'
+        ], 422);
     }
+
+    /* =========================
+       LIMPAR CARRINHO
+    ========================= */
+    $carrinhoService->limpar();
+
+    /* =========================
+       IMPRESSÃO (NÃO BLOQUEIA)
+    ========================= */
+    try {
+
+        $config = [];
+
+        $stmt = $pdoLocal->query("SELECT chave, valor FROM configuracoes");
+        if ($stmt) {
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $config[$row['chave']] = $row['valor'];
+            }
+        }
+
+        try {
+            $pdoRemoto = Database::conectarRemoto();
+
+            $cfg = $pdoRemoto->query("SELECT * FROM configuracoes_empresa LIMIT 1")
+                             ->fetch(PDO::FETCH_ASSOC);
+
+            if (is_array($cfg)) {
+                $config = array_merge($config, $cfg);
+            }
+
+        } catch (Throwable $e) {
+            // offline OK
+        }
+
+        ReciboImpressaoService::imprimir(
+            $result['venda_id'],
+            $pdoLocal,
+            $config
+        );
+
+    } catch (Throwable $e) {
+        logVenda("Erro impressão", $e->getMessage());
+    }
+
+    /* =========================
+       RESPOSTA FINAL
+    ========================= */
+    responder([
+        'success'          => true,
+        'venda_id'         => $result['venda_id'] ?? null,
+        'uuid'             => $result['uuid'] ?? null,
+        'subtotal'         => $result['subtotal'] ?? 0,
+        'desconto'         => $result['desconto'] ?? 0,
+        'imposto'          => $result['imposto'] ?? 0,
+        'total'            => $result['total'] ?? 0,
+        'troco'            => $result['troco'] ?? 0,
+        'metodo_pagamento' => $metodoPagamento
+    ]);
 
 } catch (Throwable $e) {
 
-    ob_clean();
+    logVenda("ERRO FATAL", $e->getMessage());
 
-    echo json_encode([
+    responder([
         'success' => false,
-        'message' => 'Erro interno no servidor',
-        'debug' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
-    ]);
+        'message' => 'Erro interno do servidor',
+        'error'   => $e->getMessage()
+    ], 500);
 }

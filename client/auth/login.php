@@ -50,22 +50,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $erro = "Resposta inválida do servidor";
 
-            } elseif (($res['status'] ?? '') === 'success') {
+           } elseif (($res['status'] ?? '') === 'success') {
 
-                session_regenerate_id(true);
+    session_regenerate_id(true);
 
-                $_SESSION['usuario_id'] = $res['usuario']['id'];
-                $_SESSION['nome'] = $res['usuario']['nome'];
-                $_SESSION['nivel'] = $res['usuario']['nivel'];
-                $_SESSION['caixa_id'] = 1;
+    $_SESSION['usuario_id'] = $res['usuario']['id'];
+    $_SESSION['nome'] = $res['usuario']['nome'];
+    $_SESSION['nivel'] = strtolower(trim($res['usuario']['nivel']));
+    $_SESSION['caixa_id'] = 1;
 
-                header("Location: /Mambo_system_sales_95/client/pos/index.php");
-                exit;
+    $nivel = $_SESSION['nivel'];
 
-            } else {
+    switch ($nivel) {
 
-                $erro = $res['mensagem'] ?? 'Login inválido';
-            }
+        case 'admin':
+        case 'administrador':
+            header("Location: /Mambo_system_sales_95/public/index_admin.php");
+            exit;
+
+        case 'gerente':
+            header("Location: /Mambo_system_sales_95/public/index_gerente.php");
+            exit;
+
+        case 'supervisor':
+            header("Location: /Mambo_system_sales_95/public/index_supervisor.php");
+            exit;
+
+        case 'caixa':
+            header("Location: /Mambo_system_sales_95/client/pos/index.php");
+            exit;
+
+        default:
+            $erro = "Perfil de usuário sem permissão.";
+            break;
+    }
+
+}
         }
     }
 }

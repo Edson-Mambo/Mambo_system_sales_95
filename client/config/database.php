@@ -23,24 +23,28 @@ class Database
     }
 
     /**
-     * =========================
-     * MYSQL REMOTO (SYNC FUTURO)
-     * =========================
-     */
-    public static function conectarRemoto(): PDO
-    {
-        $host = "localhost";
-        $dbname = "mambo_system";
-        $user = "root";
-        $pass = "";
+ * =========================
+ * MYSQL REMOTO (CONFIG / SYNC)
+ * =========================
+ */
+public static function conectarRemoto(): PDO
+{
+    $host = "localhost";
 
-        return new PDO(
-            "mysql:host=$host;dbname=$dbname;charset=utf8",
-            $user,
-            $pass,
-            [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-            ]
-        );
-    }
+    // ALTERAR PARA O NOME REAL DA SUA BASE
+    $dbname = "mambo_system_sales_95";
+
+    $user = "root";
+    $pass = "";
+
+    return new PDO(
+        "mysql:host=$host;dbname=$dbname;charset=utf8mb4",
+        $user,
+        $pass,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 3
+        ]
+    );
+}
 }

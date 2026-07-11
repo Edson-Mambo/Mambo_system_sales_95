@@ -19,16 +19,7 @@ if (empty($_SESSION['usuario_id'])) {
 
 $nivel = strtolower(trim($_SESSION['nivel'] ?? ''));
 
-// Todos os usuários autenticados podem acessar o POS
-$permissoes = [
-    'administrador',
-    'admin',
-    'gerente',
-    'supervisor',
-    'caixa'
-];
-
-if (!in_array($nivel, $permissoes)) {
+if ($nivel !== 'caixa') {
     header("Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso");
     exit;
 }
@@ -942,56 +933,38 @@ unset($_SESSION['erro']);
 <!-- Toast global -->
 <div id="toast-pos"></div>
 
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
   const TOTAL_BASE = <?= json_encode((float)$total) ?>;
 
   /* ─────────────────────────────────────────
-     UTILITÁRIO: TOAST (robust)
+     UTILITÁRIO: TOAST
   ───────────────────────────────────────── */
   const toastEl = document.getElementById("toast-pos");
   let toastTimer;
 
   function toast(msg, tipo = "info") {
-    if (!toastEl) return;
-
     clearTimeout(toastTimer);
     toastEl.textContent = msg;
-    toastEl.className = "show " + tipo;
-
-    toastTimer = setTimeout(() => {
-      toastEl.classList.remove("show");
-    }, 3200);
+    toastEl.className   = "show " + tipo;
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
   }
 
   /* ─────────────────────────────────────────
-     SAFE FETCH JSON
+     BUSCA DE PRODUTO — autocomplete AJAX
   ───────────────────────────────────────── */
-  async function fetchJSON(url, options = {}) {
-    const res = await fetch(url, options);
-    const text = await res.text();
-
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error("Resposta inválida:", text);
-      throw new Error("Resposta inválida do servidor.");
-    }
-  }
-
-  /* ─────────────────────────────────────────
-     AUTOCOMPLETE PRODUTO
-  ───────────────────────────────────────── */
-  const campoProduto = document.getElementById("busca_produto");
-  const resultadoDiv = document.getElementById("resultado_produtos");
+  const campoProduto  = document.getElementById("busca_produto");
+  const resultadoDiv  = document.getElementById("resultado_produtos");
   let debounceTimer;
 
   campoProduto?.addEventListener("input", function () {
     const termo = this.value.trim();
     clearTimeout(debounceTimer);
-
-    if (!resultadoDiv) return;
 
     if (termo.length < 2) {
       resultadoDiv.style.display = "none";
@@ -999,78 +972,87 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    debounceTimer = setTimeout(async () => {
-      try {
-        const data = await fetchJSON("ajax/buscar_produto.php?termo=" + encodeURIComponent(termo));
+    debounceTimer = setTimeout(() => {
+      fetch("ajax/buscar_produto.php?termo=" + encodeURIComponent(termo))
+        .then(r => r.json())
+        .then(data => {
+          if (!Array.isArray(data) || data.length === 0) {
+            resultadoDiv.innerHTML = "<div style='padding:.7rem 1rem;color:var(--muted);font-size:.85rem;'>Nenhum produto encontrado.</div>";
+            resultadoDiv.style.display = "block";
+            return;
+          }
 
-        if (!Array.isArray(data) || data.length === 0) {
-          resultadoDiv.innerHTML = "<div style='padding:.7rem 1rem;color:var(--muted);font-size:.85rem;'>Nenhum produto encontrado.</div>";
-          resultadoDiv.style.display = "block";
-          return;
-        }
-
-        let html = "";
-
-        data.forEach(p => {
-          html += `
-            <div class="produto-item" data-codigo="${escHtml(p.codigo_barra)}" tabindex="0">
-              <div>
-                <div class="prod-nome">${escHtml(p.nome)}</div>
-                <div class="prod-meta">${escHtml(p.codigo_barra)}</div>
-              </div>
-              <div class="prod-preco">MT ${parseFloat(p.preco || 0).toFixed(2).replace(".", ",")}</div>
-            </div>`;
-        });
-
-        resultadoDiv.innerHTML = html;
-        resultadoDiv.style.display = "block";
-
-        resultadoDiv.querySelectorAll(".produto-item").forEach(item => {
-          item.addEventListener("click", function () {
-            campoProduto.value = this.dataset.codigo;
-            resultadoDiv.style.display = "none";
-            campoProduto.focus();
+          let html = "";
+          data.forEach(p => {
+            html += `
+              <div class="produto-item" data-codigo="${escHtml(p.codigo_barra)}">
+                <div>
+                  <div class="prod-nome">${escHtml(p.nome)}</div>
+                  <div class="prod-meta">${escHtml(p.codigo_barra)}</div>
+                </div>
+                <div class="prod-preco">MT ${parseFloat(p.preco).toFixed(2).replace(".", ",")}</div>
+              </div>`;
           });
-        });
 
-      } catch (err) {
-        console.error(err);
-        if (resultadoDiv) resultadoDiv.style.display = "none";
-      }
+          resultadoDiv.innerHTML = html;
+          resultadoDiv.style.display = "block";
+
+          resultadoDiv.querySelectorAll(".produto-item").forEach(item => {
+            item.addEventListener("click", function () {
+              campoProduto.value = this.dataset.codigo;
+              resultadoDiv.style.display = "none";
+              campoProduto.focus();
+            });
+          });
+        })
+        .catch(() => {
+          resultadoDiv.style.display = "none";
+        });
     }, 280);
   });
 
+  // Fecha autocomplete ao clicar fora
   document.addEventListener("click", function (e) {
-    if (!campoProduto || !resultadoDiv) return;
+    if (!campoProduto?.contains(e.target) && !resultadoDiv?.contains(e.target)) {
+      resultadoDiv.style.display = "none";
+    }
+  });
 
-    if (!campoProduto.contains(e.target) && !resultadoDiv.contains(e.target)) {
+  // Navegar com teclado no autocomplete
+  campoProduto?.addEventListener("keydown", function (e) {
+    const items = resultadoDiv.querySelectorAll(".produto-item");
+    const active = resultadoDiv.querySelector(".produto-item:focus, .produto-item.focused");
+    if (!items.length || resultadoDiv.style.display === "none") return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = active ? active.nextElementSibling : items[0];
+      if (next) { active?.classList.remove("focused"); next.classList.add("focused"); next.focus(); }
+    } else if (e.key === "Escape") {
       resultadoDiv.style.display = "none";
     }
   });
 
   /* ─────────────────────────────────────────
-     MÉTODO PAGAMENTO
+     MÉTODO DE PAGAMENTO — cards clicáveis
   ───────────────────────────────────────── */
   const metodoInput = document.getElementById("metodo_pagamento");
   const divNumAuth  = document.getElementById("div_numero_autorizacao");
 
   document.querySelectorAll(".pagamento-card").forEach(card => {
     card.addEventListener("click", function () {
-
       document.querySelectorAll(".pagamento-card").forEach(c => c.classList.remove("active"));
       this.classList.add("active");
-
-      if (metodoInput) metodoInput.value = this.dataset.metodo;
-
-      document.getElementById("erroMetodo")?.classList.add("d-none");
+      metodoInput.value = this.dataset.metodo;
+      document.getElementById("erroMetodo").classList.add("d-none");
 
       const precisaAuth = ["mpesa", "emola", "cartao"].includes(this.dataset.metodo);
-      if (divNumAuth) divNumAuth.classList.toggle("d-none", !precisaAuth);
+      divNumAuth.classList.toggle("d-none", !precisaAuth);
     });
   });
 
   /* ─────────────────────────────────────────
-     TOTAIS / TROCO
+     CÁLCULO TOTAL / TROCO
   ───────────────────────────────────────── */
   const descontoCheck = document.getElementById("desconto_colaborador");
   const valorPago     = document.getElementById("valor_pago");
@@ -1088,16 +1070,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (trocoSpan) {
-      if (pago <= 0) {
+      if (pago === 0) {
         trocoSpan.textContent = "—";
-        trocoSpan.className = "";
+        trocoSpan.className   = "";
       } else if (troco < 0) {
-        trocoSpan.textContent =
-          "Insuficiente (−MT " + Math.abs(troco).toFixed(2).replace(".", ",") + ")";
-        trocoSpan.className = "negativo fs-5 fw-bold";
+        trocoSpan.textContent = "Insuficiente (−MT " + Math.abs(troco).toFixed(2).replace(".", ",") + ")";
+        trocoSpan.className   = "negativo fs-5 fw-bold";
       } else {
         trocoSpan.textContent = "MT " + troco.toFixed(2).replace(".", ",");
-        trocoSpan.className = "positivo fs-5 fw-bold";
+        trocoSpan.className   = "positivo fs-5 fw-bold";
       }
     }
   }
@@ -1106,16 +1087,17 @@ document.addEventListener("DOMContentLoaded", function () {
   descontoCheck?.addEventListener("change", calcularTotais);
   calcularTotais();
 
+  // Reset ao abrir modal finalizar
   document.getElementById("finalizarModal")?.addEventListener("show.bs.modal", function () {
     document.querySelectorAll(".pagamento-card").forEach(c => c.classList.remove("active"));
-    if (metodoInput) metodoInput.value = "";
+    metodoInput.value = "";
     if (valorPago) valorPago.value = "";
     if (divNumAuth) divNumAuth.classList.add("d-none");
     calcularTotais();
   });
 
   /* ─────────────────────────────────────────
-     FINALIZAR VENDA
+     FINALIZAR VENDA (AJAX)
   ───────────────────────────────────────── */
   const formFinalizar = document.getElementById("formFinalizarVenda");
   const btnConfirmar  = document.getElementById("btnConfirmarVenda");
@@ -1129,55 +1111,57 @@ document.addEventListener("DOMContentLoaded", function () {
     const metodo   = metodoInput?.value || "";
 
     if (!metodo) {
-      document.getElementById("erroMetodo")?.classList.remove("d-none");
+      document.getElementById("erroMetodo").classList.remove("d-none");
       return;
     }
 
     if (pago < total) {
-      toast("Valor pago insuficiente.", "error");
+      toast("⚠️ Valor pago insuficiente para cobrir o total.", "error");
       valorPago?.focus();
       return;
     }
 
     btnConfirmar.disabled = true;
-    btnConfirmar.innerHTML = "Processando...";
+    btnConfirmar.innerHTML = '<span class="spin"></span> Processando…';
 
     const payload = {
-      metodo_pagamento: metodo,
+      metodo_pagamento:   metodo,
       numero_autorizacao: document.getElementById("numero_autorizacao")?.value || "",
-      valor_pago: pago,
-      desconto: descontoCheck?.checked || false
+      valor_pago:         pago,
+      desconto:           descontoCheck?.checked || false
     };
 
     try {
-      const data = await fetchJSON("ajax/finalizar_venda.php", {
-        method: "POST",
+      const res  = await fetch("ajax/finalizar_venda.php", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body:    JSON.stringify(payload)
       });
 
+      const data = await res.json();
+
       if (!data.success) {
-        toast(data.message || "Erro ao finalizar venda.", "error");
+        toast("❌ " + (data.message || "Erro ao finalizar venda."), "error");
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = "✅ Confirmar Venda";
         return;
       }
 
-      toast("Venda finalizada com sucesso!", "success");
-
-      const pdfUrl = data.pdf_url || `gerar_recibo.php?venda_id=${data.venda_id}`;
+      toast("✅ Venda finalizada com sucesso!", "success");
 
       if (data.venda_id) {
+        const pdfUrl = data.pdf_url || `gerar_recibo.php?venda_id=${data.venda_id}`;
         window.location.href = pdfUrl;
-        setTimeout(() => location.href = "index.php", 1200);
+        setTimeout(() => { location.href = "index.php"; }, 1200);
       } else {
         setTimeout(() => location.reload(), 900);
       }
 
     } catch (err) {
-      console.error(err);
-      toast("Erro de comunicação.", "error");
-    } finally {
+      console.error("Erro ao finalizar venda:", err);
+      toast("❌ Erro de comunicação com o servidor.", "error");
       btnConfirmar.disabled = false;
-      btnConfirmar.innerHTML = "Confirmar Venda";
+      btnConfirmar.innerHTML = "✅ Confirmar Venda";
     }
   });
 
@@ -1186,71 +1170,75 @@ document.addEventListener("DOMContentLoaded", function () {
   ───────────────────────────────────────── */
   document.querySelectorAll(".btn-remover").forEach(btn => {
     btn.addEventListener("click", function () {
-      document.getElementById("codigoProdutoRemover").value = this.dataset.codigo;
-      document.getElementById("senha_autorizacao").value = "";
-      document.getElementById("erro_autorizacao")?.classList.add("d-none");
-
-      bootstrap.Modal.getOrCreateInstance(
-        document.getElementById("modalAutorizacao")
-      ).show();
+      const codigo = this.dataset.codigo;
+      document.getElementById("codigoProdutoRemover").value = codigo;
+      document.getElementById("senha_autorizacao").value    = "";
+      document.getElementById("erro_autorizacao").classList.add("d-none");
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("modalAutorizacao")).show();
     });
   });
 
   document.getElementById("formAutorizacao")?.addEventListener("submit", async function (e) {
     e.preventDefault();
 
-    const codigo = document.getElementById("codigoProdutoRemover").value;
-    const senha  = document.getElementById("senha_autorizacao").value;
-
-    const btnRem  = document.getElementById("btnConfirmarRemover");
+    const codigo  = document.getElementById("codigoProdutoRemover").value;
+    const senha   = document.getElementById("senha_autorizacao").value;
     const erroDiv = document.getElementById("erro_autorizacao");
+    const btnRem  = document.getElementById("btnConfirmarRemover");
+
+    erroDiv.classList.add("d-none");
+    btnRem.disabled    = true;
+    btnRem.innerHTML   = '<span class="spin"></span> Verificando…';
 
     try {
-      btnRem.disabled = true;
-
-      const auth = await fetchJSON("ajax/validar_autorizacao.php", {
-        method: "POST",
+      const resAuth = await fetch("validar_autorizacao.php", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo, senha })
+        body:    JSON.stringify({ codigo, senha })
       });
+
+      const auth = await resAuth.json();
 
       if (!auth.success) {
-        erroDiv?.classList.remove("d-none");
+        erroDiv.classList.remove("d-none");
+        btnRem.disabled  = false;
+        btnRem.innerHTML = "Confirmar Remoção";
         return;
       }
 
-      const rem = await fetchJSON("ajax/remover_produto.php", {
-        method: "POST",
+      const resRem = await fetch("ajax/remover_produto.php", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo })
+        body:    JSON.stringify({ codigo })
       });
 
-      if (!rem.success) {
-        toast(rem.message || "Erro ao remover.", "error");
-        return;
-      }
+      const rem = await resRem.json();
 
-      const btn = document.querySelector(`.btn-remover[data-codigo="${CSS.escape(codigo)}"]`);
-      const tr  = btn?.closest("tr");
+      if (rem.success) {
+        bootstrap.Modal.getInstance(document.getElementById("modalAutorizacao"))?.hide();
 
-      bootstrap.Modal.getInstance(document.getElementById("modalAutorizacao"))?.hide();
+        const btn = document.querySelector(`.btn-remover[data-codigo="${CSS.escape(codigo)}"]`);
+        const tr  = btn?.closest("tr");
 
-      if (tr) {
-        tr.remove();
-        atualizarNumeracao();
+        if (tr) {
+          tr.classList.add("linha-removendo");
+          setTimeout(() => { tr.remove(); atualizarNumeracao(); }, 320);
+        } else {
+          location.reload();
+        }
+
+        toast("🗑 Produto removido.", "info");
       } else {
-        location.reload();
+        toast("❌ " + (rem.message || "Erro ao remover produto."), "error");
       }
-
-      toast("Produto removido.", "info");
 
     } catch (err) {
-      console.error(err);
-      toast("Erro de comunicação.", "error");
-    } finally {
-      btnRem.disabled = false;
-      btnRem.innerHTML = "Confirmar Remoção";
+      console.error("Erro:", err);
+      toast("❌ Erro de comunicação.", "error");
     }
+
+    btnRem.disabled  = false;
+    btnRem.innerHTML = "Confirmar Remoção";
   });
 
   function atualizarNumeracao() {
@@ -1261,78 +1249,178 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   /* ─────────────────────────────────────────
-     CLIENTES
+     BUSCAR CLIENTE — modal
+     O ajax/buscar_cliente.php deve retornar JSON
   ───────────────────────────────────────── */
   const inputBuscar  = document.getElementById("buscar_cliente_input");
   const resultadoBox = document.getElementById("resultado_busca_cliente");
+  const btnBuscar    = document.getElementById("btnBuscarCliente");
 
-  async function executarBuscaCliente() {
+  function executarBuscaCliente() {
     const termo = inputBuscar?.value.trim() || "";
 
     if (termo.length < 2) {
-      resultadoBox.innerHTML = "Digite pelo menos 2 caracteres.";
+      resultadoBox.innerHTML = "<p class='text-danger small mb-0'>⚠️ Digite pelo menos 2 caracteres.</p>";
       return;
     }
 
-    resultadoBox.innerHTML = "Buscando...";
+    resultadoBox.innerHTML = "<div class='text-muted' style='font-size:.85rem;'><span class='spin'></span> Buscando…</div>";
 
-    try {
-      const data = await fetchJSON("ajax/buscar_cliente.php?termo=" + encodeURIComponent(termo));
+    fetch("ajax/buscar_cliente.php?termo=" + encodeURIComponent(termo))
+      .then(async res => {
+        const text = await res.text();
+        try { return JSON.parse(text); }
+        catch { throw new Error("Resposta inválida do servidor."); }
+      })
+      .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+          resultadoBox.innerHTML = `
+            <div class="text-center py-4" style="color:var(--muted);">
+              <div style="font-size:2rem;margin-bottom:.5rem;">👤</div>
+              <div style="font-size:.88rem;">Nenhum cliente encontrado para "<strong>${escHtml(termo)}</strong>".</div>
+            </div>`;
+          return;
+        }
 
-      if (!Array.isArray(data) || data.length === 0) {
-        resultadoBox.innerHTML = "Nenhum cliente encontrado.";
-        return;
-      }
-
-      resultadoBox.innerHTML = data.map(c => {
-        const nome = (c.nome + " " + (c.apelido ?? "")).trim();
-        return `
-          <button class="cliente-item-btn" data-id="${c.id}" data-nome="${escHtml(nome)}">
-            ${escHtml(nome)} - ${escHtml(c.telefone ?? "")}
-          </button>`;
-      }).join("");
-
-      resultadoBox.querySelectorAll(".cliente-item-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          definirCliente(btn.dataset.id, btn.dataset.nome);
+        let html = "";
+        data.forEach(c => {
+          const nome    = (c.nome + " " + (c.apelido ?? "")).trim();
+          const inicial = nome.charAt(0).toUpperCase();
+          html += `
+            <button type="button"
+                    class="cliente-item-btn"
+                    data-id="${c.id}"
+                    data-nome="${escHtml(nome)}">
+              <div class="ci-avatar">${inicial}</div>
+              <div>
+                <div class="ci-nome">${escHtml(nome)}</div>
+                <div class="ci-tel">📞 ${escHtml(c.telefone ?? '')}</div>
+              </div>
+            </button>`;
         });
-      });
+        resultadoBox.innerHTML = html;
 
-    } catch (err) {
-      resultadoBox.innerHTML = "Erro ao buscar clientes.";
-    }
+        resultadoBox.querySelectorAll(".cliente-item-btn").forEach(btn => {
+          btn.addEventListener("click", function () {
+            const id   = this.dataset.id;
+            const nome = this.dataset.nome;
+            definirCliente(id, nome);
+          });
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        resultadoBox.innerHTML = "<div class='alert alert-danger py-2' style='font-size:.85rem;'>Erro ao buscar clientes.</div>";
+      });
   }
 
-  document.getElementById("btnBuscarCliente")?.addEventListener("click", executarBuscaCliente);
-  inputBuscar?.addEventListener("keydown", e => {
-    if (e.key === "Enter") executarBuscaCliente();
+  btnBuscar?.addEventListener("click", executarBuscaCliente);
+
+  inputBuscar?.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); executarBuscaCliente(); }
+  });
+
+  // Limpa ao abrir modal
+  document.getElementById("modalBuscarCliente")?.addEventListener("show.bs.modal", function () {
+    if (inputBuscar)  inputBuscar.value = "";
+    if (resultadoBox) resultadoBox.innerHTML = "";
   });
 
   /* ─────────────────────────────────────────
-     DEFINIR CLIENTE
+     DEFINIR CLIENTE (único ponto de set)
   ───────────────────────────────────────── */
   async function definirCliente(id, nome) {
     try {
-      const data = await fetchJSON("ajax/set_cliente.php", {
-        method: "POST",
+      const res  = await fetch("ajax/set_cliente.php", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cliente_id: id })
+        body:    JSON.stringify({ cliente_id: id })
       });
+      const data = await res.json();
 
-      if (!data.success) return toast("Erro cliente", "error");
-
-      document.getElementById("clienteSelecionadoTexto").textContent = nome;
-      document.getElementById("clienteSelecionadoId").value = id;
-
-      toast("Cliente selecionado", "success");
-
+      if (!data.success) {
+        toast("❌ " + (data.message || "Erro ao selecionar cliente."), "error");
+        return;
+      }
     } catch (err) {
-      toast("Erro conexão", "error");
+      console.error("set_cliente:", err);
+      toast("❌ Erro de conexão.", "error");
+      return;
     }
+
+    // Atualiza badge
+    document.getElementById("clienteSelecionadoTexto").textContent = nome;
+    document.getElementById("clienteSelecionadoId").value = id;
+    document.getElementById("clienteBadgeWrap")?.classList.add("tem-cliente");
+
+    // Fecha modais abertos
+    ["modalBuscarCliente", "modalCadastrarCliente"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) bootstrap.Modal.getInstance(el)?.hide();
+    });
+
+    limparBackdrop();
+    toast("👤 Cliente selecionado: " + nome, "success");
   }
 
   /* ─────────────────────────────────────────
-     HELPERS
+     CADASTRAR CLIENTE
+  ───────────────────────────────────────── */
+  const formCadastrar    = document.getElementById("formCadastrarCliente");
+  const btnSalvarCliente = document.getElementById("btnSalvarCliente");
+
+  formCadastrar?.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    btnSalvarCliente.disabled = true;
+    btnSalvarCliente.innerHTML = '<span class="spin"></span> Salvando…';
+
+    fetch("ajax/cadastrar_cliente.php", {
+      method: "POST",
+      body:   new FormData(formCadastrar)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        formCadastrar.reset();
+        definirCliente(data.cliente.id, data.cliente.nome);
+      } else {
+        toast("❌ " + (data.message || "Erro ao cadastrar cliente."), "error");
+      }
+    })
+    .catch(() => { toast("❌ Erro de comunicação com o servidor.", "error"); })
+    .finally(() => {
+      btnSalvarCliente.disabled = false;
+      btnSalvarCliente.innerHTML = "💾 Salvar Cliente";
+    });
+  });
+
+  /* ─────────────────────────────────────────
+     LIMPAR BACKDROP DE MODAIS
+  ───────────────────────────────────────── */
+  function limparBackdrop() {
+    setTimeout(() => {
+      document.querySelectorAll(".modal-backdrop").forEach(el => el.remove());
+      document.body.classList.remove("modal-open");
+      document.body.style.overflow   = "";
+      document.body.style.paddingRight = "";
+    }, 380);
+  }
+
+  /* ─────────────────────────────────────────
+     ATALHO F9
+  ───────────────────────────────────────── */
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "F9") {
+      e.preventDefault();
+      <?php if (!empty($carrinho)) : ?>
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("finalizarModal")).show();
+      <?php endif; ?>
+    }
+  });
+
+  /* ─────────────────────────────────────────
+     HELPER: escapar HTML (para innerHTML dinâmico)
   ───────────────────────────────────────── */
   function escHtml(str) {
     return String(str ?? "")
@@ -1342,7 +1430,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/"/g, "&quot;");
   }
 
-});
+});/* /DOMContentLoaded */
 </script>
 
 </body>

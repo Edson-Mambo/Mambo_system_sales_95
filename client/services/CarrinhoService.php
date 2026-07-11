@@ -1,49 +1,57 @@
 <?php
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
 class CarrinhoService
 {
     private $pdo;
 
     public function __construct()
     {
-        // 🔥 ligação direta à base de dados (SQLite no teu caso)
         $this->pdo = new PDO(
-            "sqlite:" . __DIR__ . "/../localdb/mambo_local.db"
+            "sqlite:" . __DIR__ . "/../localdb/mambo_local.db",
+            null,
+            null,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
-
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     }
 
-    public function adicionar(array $produto, float $quantidade): void
+        public function adicionar(array $produto, float $quantidade): void
     {
         if (!isset($_SESSION['carrinho'])) {
             $_SESSION['carrinho'] = [];
         }
 
-        $id = $produto['id'] ?? 0;
+        $id = (int)($produto['id'] ?? $produto['produto_id'] ?? 0);
 
         if ($id <= 0) {
             throw new Exception("Produto inválido ao adicionar ao carrinho.");
         }
 
-        // 🔥 SEMPRE buscar preço real da base de dados (fonte única de verdade)
         $stmt = $this->pdo->prepare("
-            SELECT 
-                COALESCE(preco_venda, preco, valor, 0) AS preco
+            SELECT id, nome, codigo_barra, preco
             FROM produtos
             WHERE id = ?
+            AND (ativo = 1 OR ativo IS NULL)
+            AND deleted_at IS NULL
         ");
 
         $stmt->execute([$id]);
-        $preco = (float) $stmt->fetchColumn();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($preco <= 0) {
-            throw new Exception("Preço inválido para o produto ID: $id");
+        if (!$row) {
+            throw new Exception("Produto não encontrado.");
         }
 
-        // 🔥 Se já existe no carrinho, apenas atualiza quantidade
+        $preco = (float)$row['preco'];
+
+        if ($preco <= 0) {
+            throw new Exception("Preço inválido.");
+        }
+
+        // SE EXISTE → atualiza
         if (isset($_SESSION['carrinho'][$id])) {
 
             $_SESSION['carrinho'][$id]['quantidade'] += $quantidade;
@@ -51,33 +59,35 @@ class CarrinhoService
         } else {
 
             $_SESSION['carrinho'][$id] = [
-                'id'         => $id,
-                'nome'       => $produto['nome'] ?? 'Produto',
-                'codigo'     => $produto['codigo'] ?? '',
+                'produto_id' => $id,
+                'nome'       => $row['nome'],
+                'codigo'     => $row['codigo_barra'] ?? '',
                 'preco'      => $preco,
-                'quantidade' => $quantidade
+                'quantidade' => $quantidade,
             ];
         }
+
+        // 🔥 SEMPRE recalcular subtotal (CRÍTICO PARA VENDA)
+        $_SESSION['carrinho'][$id]['subtotal'] =
+            $_SESSION['carrinho'][$id]['preco'] *
+            $_SESSION['carrinho'][$id]['quantidade'];
     }
 
     public function listar(): array
     {
-        return $_SESSION['carrinho'] ?? [];
+        // Devolve array indexado (não associativo) para o VendaService
+        return array_values($_SESSION['carrinho'] ?? []);
     }
 
     public function total(): float
     {
-        $total = 0;
+        $total = 0.0;
 
         foreach ($this->listar() as $item) {
-
-            $preco = (float)($item['preco'] ?? 0);
-            $quantidade = (float)($item['quantidade'] ?? 0);
-
-            $total += $preco * $quantidade;
+            $total += (float)($item['preco'] ?? 0) * (float)($item['quantidade'] ?? 0);
         }
 
-        return $total;
+        return round($total, 2);
     }
 
     public function limpar(): void
@@ -85,19 +95,24 @@ class CarrinhoService
         $_SESSION['carrinho'] = [];
     }
 
-    // 🔥 opcional: atualizar um item específico
     public function atualizarQuantidade(int $id, float $quantidade): void
     {
         if (isset($_SESSION['carrinho'][$id])) {
-            $_SESSION['carrinho'][$id]['quantidade'] = $quantidade;
+            if ($quantidade <= 0) {
+                unset($_SESSION['carrinho'][$id]);
+            } else {
+                $_SESSION['carrinho'][$id]['quantidade'] = $quantidade;
+            }
         }
     }
 
-    // 🔥 opcional: remover item
     public function remover(int $id): void
     {
-        if (isset($_SESSION['carrinho'][$id])) {
-            unset($_SESSION['carrinho'][$id]);
-        }
+        unset($_SESSION['carrinho'][$id]);
+    }
+
+    public function contar(): int
+    {
+        return count($_SESSION['carrinho'] ?? []);
     }
 }

@@ -3,7 +3,7 @@
 namespace Services;
 
 use PDO;
-use Exception;
+use Throwable;
 
 require_once __DIR__ . '/../config/database.php';
 
@@ -13,7 +13,7 @@ class AuthService
 
     public function __construct()
     {
-        $this->pdo = \Database::conectar();
+        $this->pdo = \Database::conectarLocal();
 
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -23,106 +23,156 @@ class AuthService
     /* =========================
        LOGIN
     ========================= */
-    public function login(string $usuario, string $senha): array
+    public function login(string $username, string $senha): array
     {
         try {
 
+            // schema v2: coluna é `username`, não `usuario`
             $stmt = $this->pdo->prepare("
-                SELECT *
+                SELECT id, uuid, nome, username, password, nivel,
+                       ativo, deleted_at
                 FROM usuarios
-                WHERE usuario = :usuario
+                WHERE username = :username
+                  AND deleted_at IS NULL
                 LIMIT 1
             ");
 
-            $stmt->execute([
-                ':usuario' => trim($usuario)
-            ]);
-
+            $stmt->execute([':username' => trim($username)]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
+                return ['success' => false, 'message' => 'Usuário não encontrado'];
+            }
 
-                return [
-                    'success' => false,
-                    'message' => 'Usuário não encontrado'
-                ];
+            if (!$user['ativo']) {
+                return ['success' => false, 'message' => 'Conta desactivada'];
             }
 
             /* =========================
                VALIDAR SENHA
+               schema v2: coluna é `password`, não `senha`
+               SEGURANÇA: nunca comparar senha em texto simples
             ========================= */
+            // schema v2: coluna é `password`
+            $hash = $user['password'] ?? '';
 
-            $senhaValida = false;
-
-            // password_hash
-            if (!empty($user['senha']) && password_verify($senha, $user['senha'])) {
-                $senhaValida = true;
+            if (empty($hash)) {
+                return ['success' => false, 'message' => 'Conta sem senha definida'];
             }
 
-            // fallback senha simples
-            if (!$senhaValida && $senha === $user['senha']) {
-                $senhaValida = true;
+            if (!password_verify($senha, $hash)) {
+                return ['success' => false, 'message' => 'Senha incorreta'];
             }
 
-            if (!$senhaValida) {
-
-                return [
-                    'success' => false,
-                    'message' => 'Senha incorreta'
-                ];
+            // Re-hash automático se o algoritmo mudou (PHP 8+)
+            if (password_needs_rehash($hash, PASSWORD_BCRYPT)) {
+                $this->pdo->prepare("
+                    UPDATE usuarios
+                    SET password   = ?,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                ")->execute([password_hash($senha, PASSWORD_BCRYPT), $user['id']]);
             }
 
             /* =========================
                SESSÃO
             ========================= */
+            session_regenerate_id(true); // previne session fixation
 
-            $_SESSION['usuario_id'] = $user['id'];
-            $_SESSION['usuario_nome'] = $user['nome'] ?? $user['usuario'];
-            $_SESSION['usuario_login'] = $user['usuario'];
-
-            $_SESSION['nivel_acesso'] =
-                $user['nivel_acesso']
-                ?? $user['nivel']
-                ?? 'caixa';
-
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-
-            $_SESSION['logado'] = true;
+            $_SESSION['usuario_id']    = $user['id'];
+            $_SESSION['usuario_uuid']  = $user['uuid'];
+            $_SESSION['usuario_nome']  = $user['nome'];
+            $_SESSION['usuario_login'] = $user['username'];
+            $_SESSION['nivel_acesso']  = $user['nivel'] ?? 'caixa';
+            $_SESSION['logado']        = true;
+            $_SESSION['csrf_token']    = bin2hex(random_bytes(32));
 
             /* =========================
-               ÚLTIMO LOGIN
+               ÚLTIMO ACESSO
+               schema v2: coluna é `ultimo_acesso`, não `ultimo_login`
             ========================= */
-
-            try {
-
-                $update = $this->pdo->prepare("
-                    UPDATE usuarios
-                    SET ultimo_login = datetime('now')
-                    WHERE id = ?
-                ");
-
-                $update->execute([$user['id']]);
-
-            } catch (Exception $e) {
-                // ignora
-            }
+            $this->pdo->prepare("
+                UPDATE usuarios
+                SET ultimo_acesso = datetime('now'),
+                    updated_at    = datetime('now')
+                WHERE id = ?
+            ")->execute([$user['id']]);
 
             return [
                 'success' => true,
                 'message' => 'Login realizado',
                 'usuario' => [
-                    'id' => $user['id'],
-                    'nome' => $_SESSION['usuario_nome'],
-                    'nivel' => $_SESSION['nivel_acesso']
-                ]
+                    'id'    => $user['id'],
+                    'nome'  => $user['nome'],
+                    'nivel' => $_SESSION['nivel_acesso'],
+                ],
             ];
 
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /* =========================
+       LOGIN POR PIN (novo — schema v2)
+       Acesso rápido no POS sem digitar senha completa
+    ========================= */
+    public function loginPin(string $username, string $pin): array
+    {
+        try {
+
+            $stmt = $this->pdo->prepare("
+                SELECT id, uuid, nome, username, pin, nivel, ativo, deleted_at
+                FROM usuarios
+                WHERE username  = :username
+                  AND deleted_at IS NULL
+                LIMIT 1
+            ");
+            $stmt->execute([':username' => trim($username)]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user || !$user['ativo']) {
+                return ['success' => false, 'message' => 'Usuário não encontrado ou inactivo'];
+            }
+
+            if (empty($user['pin'])) {
+                return ['success' => false, 'message' => 'PIN não configurado'];
+            }
+
+            // PIN guardado como hash (bcrypt)
+            if (!password_verify($pin, $user['pin'])) {
+                return ['success' => false, 'message' => 'PIN incorreto'];
+            }
+
+            session_regenerate_id(true);
+
+            $_SESSION['usuario_id']    = $user['id'];
+            $_SESSION['usuario_uuid']  = $user['uuid'];
+            $_SESSION['usuario_nome']  = $user['nome'];
+            $_SESSION['usuario_login'] = $user['username'];
+            $_SESSION['nivel_acesso']  = $user['nivel'] ?? 'caixa';
+            $_SESSION['logado']        = true;
+            $_SESSION['csrf_token']    = bin2hex(random_bytes(32));
+
+            $this->pdo->prepare("
+                UPDATE usuarios
+                SET ultimo_acesso = datetime('now'),
+                    updated_at    = datetime('now')
+                WHERE id = ?
+            ")->execute([$user['id']]);
 
             return [
-                'success' => false,
-                'message' => $e->getMessage()
+                'success' => true,
+                'message' => 'Login por PIN realizado',
+                'usuario' => [
+                    'id'    => $user['id'],
+                    'nome'  => $user['nome'],
+                    'nivel' => $_SESSION['nivel_acesso'],
+                ],
             ];
+
+        } catch (Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
@@ -134,12 +184,9 @@ class AuthService
         $_SESSION = [];
 
         if (ini_get("session.use_cookies")) {
-
             $params = session_get_cookie_params();
-
             setcookie(
-                session_name(),
-                '',
+                session_name(), '',
                 time() - 42000,
                 $params["path"],
                 $params["domain"],
@@ -156,7 +203,7 @@ class AuthService
     ========================= */
     public function verificar(): bool
     {
-        return isset($_SESSION['usuario_id']);
+        return !empty($_SESSION['logado']) && !empty($_SESSION['usuario_id']);
     }
 
     /* =========================
@@ -169,9 +216,10 @@ class AuthService
         }
 
         return [
-            'id' => $_SESSION['usuario_id'],
-            'nome' => $_SESSION['usuario_nome'] ?? '',
-            'nivel' => $_SESSION['nivel_acesso'] ?? ''
+            'id'    => $_SESSION['usuario_id'],
+            'uuid'  => $_SESSION['usuario_uuid'] ?? null,
+            'nome'  => $_SESSION['usuario_nome']  ?? '',
+            'nivel' => $_SESSION['nivel_acesso']  ?? '',
         ];
     }
 
@@ -181,7 +229,6 @@ class AuthService
     public function exigirLogin(): void
     {
         if (!$this->verificar()) {
-
             header("Location: ../auth/login.php");
             exit;
         }
@@ -196,120 +243,81 @@ class AuthService
 
         $nivel = $_SESSION['nivel_acesso'] ?? '';
 
-        if (!in_array($nivel, $niveisPermitidos)) {
-
+        if (!in_array($nivel, $niveisPermitidos, true)) {
             http_response_code(403);
-
             die("Acesso negado");
         }
     }
 
     /* =========================
        VALIDAR AUTORIZAÇÃO
+       (ex: supervisor autoriza desconto no POS)
+
+       SEGURANÇA: a versão antiga fazia SELECT * FROM usuarios
+       e iterava todos os registos — muito inseguro.
+       Agora busca por username e verifica hash.
     ========================= */
     public function validarAutorizacao(
+        string $username,
         string $senha,
-        array $niveisPermitidos = ['admin', 'gerente', 'supervisor']
+        array  $niveisPermitidos = ['admin', 'supervisor']
     ): array {
 
         try {
 
             $stmt = $this->pdo->prepare("
-                SELECT *
+                SELECT id, nome, password, nivel, ativo, deleted_at
                 FROM usuarios
-                WHERE senha = ?
+                WHERE username   = :username
+                  AND deleted_at IS NULL
                 LIMIT 1
             ");
-
-            $stmt->execute([$senha]);
-
+            $stmt->execute([':username' => trim($username)]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$user) {
-
-                $stmt = $this->pdo->query("
-                    SELECT *
-                    FROM usuarios
-                ");
-
-                $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                foreach ($usuarios as $u) {
-
-                    if (
-                        !empty($u['senha']) &&
-                        password_verify($senha, $u['senha'])
-                    ) {
-                        $user = $u;
-                        break;
-                    }
-                }
+            if (!$user || !$user['ativo']) {
+                return ['success' => false, 'message' => 'Usuário não encontrado'];
             }
 
-            if (!$user) {
-
-                return [
-                    'success' => false,
-                    'message' => 'Senha inválida'
-                ];
+            if (!password_verify($senha, $user['password'] ?? '')) {
+                return ['success' => false, 'message' => 'Senha inválida'];
             }
 
-            $nivel =
-                $user['nivel_acesso']
-                ?? $user['nivel']
-                ?? '';
+            $nivel = $user['nivel'] ?? '';
 
-            if (!in_array($nivel, $niveisPermitidos)) {
-
-                return [
-                    'success' => false,
-                    'message' => 'Sem permissão'
-                ];
+            if (!in_array($nivel, $niveisPermitidos, true)) {
+                return ['success' => false, 'message' => 'Sem permissão'];
             }
 
             return [
                 'success' => true,
                 'usuario' => [
-                    'id' => $user['id'],
-                    'nome' => $user['nome'] ?? '',
-                    'nivel' => $nivel
-                ]
+                    'id'    => $user['id'],
+                    'nome'  => $user['nome'],
+                    'nivel' => $nivel,
+                ],
             ];
 
-        } catch (Exception $e) {
-
-            return [
-                'success' => false,
-                'message' => $e->getMessage()
-            ];
+        } catch (Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
     /* =========================
-       VALIDAR TOKEN CSRF
+       CSRF
     ========================= */
     public function validarCSRF(?string $token): bool
     {
-        if (
-            empty($_SESSION['csrf_token']) ||
-            empty($token)
-        ) {
+        if (empty($_SESSION['csrf_token']) || empty($token)) {
             return false;
         }
 
-        return hash_equals(
-            $_SESSION['csrf_token'],
-            $token
-        );
+        return hash_equals($_SESSION['csrf_token'], $token);
     }
 
-    /* =========================
-       GERAR TOKEN
-    ========================= */
     public function gerarCSRF(): string
     {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-
         return $_SESSION['csrf_token'];
     }
 }

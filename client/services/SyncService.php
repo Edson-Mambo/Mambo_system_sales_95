@@ -4,150 +4,217 @@ require_once __DIR__ . '/../config/database.php';
 
 class SyncService
 {
-    private static function serverDB()
+    /* =========================
+       CONEXÕES
+    ========================= */
+
+    private static function serverDB(): PDO
     {
-        return Database::conectar(); // servidor
+        $pdo = Database::conectar(); // MySQL servidor
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        return $pdo;
     }
 
-    private static function localDB()
+    private static function localDB(): PDO
     {
-        return new PDO("sqlite:" . __DIR__ . "/../localdb/mambo_local.db");
+        $dbPath = __DIR__ . '/../localdb/mambo_local.db';
+
+        $pdo = new PDO("sqlite:" . $dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        return $pdo;
     }
 
     /* =========================
-       PRODUTOS
+       INICIALIZAÇÃO LOCAL
     ========================= */
-    public static function syncProdutos()
-{
-    $local = self::localDB();
-    $server = self::serverDB();
 
-    $produtos = $local->query("SELECT * FROM produtos WHERE sync = 0")
-                      ->fetchAll(PDO::FETCH_ASSOC);
+    public static function initLocal()
+    {
+        $db = self::localDB();
 
-    foreach ($produtos as $p) {
+        // Tabela de sync
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS sync_meta (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE,
+                value TEXT
+            );
+        ");
 
-        $preco = $p['preco_venda']
-            ?? $p['preco']
-            ?? 0;
+        // Fila de operações offline
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS sync_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_name TEXT NOT NULL,
+                record_id INTEGER NOT NULL,
+                operation TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                synced INTEGER DEFAULT 0
+            );
+        ");
 
-        $stmt = $server->prepare("
-            INSERT OR REPLACE INTO produtos
-            (id, nome, preco, stock, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+        // Controle de sincronização
+        $stmt = $db->prepare("INSERT OR IGNORE INTO sync_meta (key, value) VALUES ('last_sync', '0')");
+        $stmt->execute();
+    }
+
+    /* =========================
+       REGISTRA OPERAÇÕES OFFLINE
+    ========================= */
+
+    public static function queueOperation($table, $recordId, $operation, $payload)
+    {
+        $db = self::localDB();
+
+        $stmt = $db->prepare("
+            INSERT INTO sync_queue (table_name, record_id, operation, payload)
+            VALUES (:table, :record, :operation, :payload)
         ");
 
         $stmt->execute([
-            $p['id'],
-            $p['nome'],
-            $preco,
-            $p['stock'],
-            $p['updated_at']
+            ':table' => $table,
+            ':record' => $recordId,
+            ':operation' => $operation,
+            ':payload' => json_encode($payload)
         ]);
-
-        $local->prepare("UPDATE produtos SET sync = 1 WHERE id = ?")
-              ->execute([$p['id']]);
     }
 
-    return count($produtos);
-}
-
     /* =========================
-       CLIENTES
+       SYNC LOCAL -> SERVER
     ========================= */
-    public static function syncClientes()
+
+    public static function pushToServer()
     {
         $local = self::localDB();
         $server = self::serverDB();
 
-        $clientes = $local->query("SELECT * FROM clientes WHERE sync = 0")->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $local->prepare("
+            SELECT * FROM sync_queue
+            WHERE synced = 0
+            ORDER BY id ASC
+        ");
+        $stmt->execute();
 
-        foreach ($clientes as $c) {
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $stmt = $server->prepare("
-                INSERT OR REPLACE INTO clientes
-                (id, nome, telefone, email, morada)
-                VALUES (?, ?, ?, ?, ?)
-            ");
+        $server->beginTransaction();
 
-            $stmt->execute([
-                $c['id'],
-                $c['nome'],
-                $c['telefone'],
-                $c['email'],
-                $c['morada']
-            ]);
+        try {
+            foreach ($items as $item) {
 
-            $local->prepare("UPDATE clientes SET sync = 1 WHERE id = ?")
-                  ->execute([$c['id']]);
+                $payload = json_decode($item['payload'], true);
+
+                if ($item['operation'] === 'INSERT') {
+                    self::insertRemote($server, $item['table_name'], $payload);
+                }
+
+                if ($item['operation'] === 'UPDATE') {
+                    self::updateRemote($server, $item['table_name'], $item['record_id'], $payload);
+                }
+
+                if ($item['operation'] === 'DELETE') {
+                    self::deleteRemote($server, $item['table_name'], $item['record_id']);
+                }
+
+                // marca como sincronizado
+                $update = $local->prepare("UPDATE sync_queue SET synced = 1 WHERE id = ?");
+                $update->execute([$item['id']]);
+            }
+
+            $server->commit();
+
+        } catch (Exception $e) {
+            $server->rollBack();
+            throw $e;
         }
-
-        return count($clientes);
     }
 
     /* =========================
-       VENDAS
+       SYNC SERVER -> LOCAL
     ========================= */
-    public static function syncVendas()
+
+    public static function pullFromServer($table)
     {
         $local = self::localDB();
         $server = self::serverDB();
 
-        $vendas = $local->query("SELECT * FROM vendas WHERE sync = 0")->fetchAll(PDO::FETCH_ASSOC);
+        // last sync timestamp
+        $stmt = $local->prepare("SELECT value FROM sync_meta WHERE key = 'last_sync'");
+        $stmt->execute();
+        $lastSync = $stmt->fetchColumn();
 
-        foreach ($vendas as $v) {
+        $query = "SELECT * FROM {$table} WHERE updated_at > :last_sync";
+        $stmt = $server->prepare($query);
+        $stmt->execute([':last_sync' => $lastSync]);
 
-            $stmt = $server->prepare("
-                INSERT INTO vendas
-                (id, cliente_id, total, metodo_pagamento, created_at)
-                VALUES (?, ?, ?, ?, ?)
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $local->beginTransaction();
+
+        try {
+            foreach ($rows as $row) {
+
+                $columns = array_keys($row);
+                $fields = implode(',', $columns);
+                $placeholders = ':' . implode(',:', $columns);
+
+                $sql = "INSERT OR REPLACE INTO {$table} ($fields)
+                        VALUES ($placeholders)";
+
+                $stmtLocal = $local->prepare($sql);
+                $stmtLocal->execute($row);
+            }
+
+            // atualiza timestamp
+            $now = date('Y-m-d H:i:s');
+            $upd = $local->prepare("
+                UPDATE sync_meta SET value = :v WHERE key = 'last_sync'
             ");
+            $upd->execute([':v' => $now]);
 
-            $stmt->execute([
-                $v['id'],
-                $v['cliente_id'],
-                $v['total'],
-                $v['metodo_pagamento'],
-                $v['created_at']
-            ]);
+            $local->commit();
 
-            $local->prepare("UPDATE vendas SET sync = 1 WHERE id = ?")
-                  ->execute([$v['id']]);
+        } catch (Exception $e) {
+            $local->rollBack();
+            throw $e;
         }
-
-        return count($vendas);
     }
 
     /* =========================
-       CAIXA
+       HELPERS SERVER
     ========================= */
-    public static function syncCaixa()
+
+    private static function insertRemote(PDO $db, $table, $data)
     {
-        $local = self::localDB();
-        $server = self::serverDB();
+        $fields = implode(',', array_keys($data));
+        $values = ':' . implode(',:', array_keys($data));
 
-        $caixa = $local->query("SELECT * FROM abertura_caixa WHERE sync = 0")->fetchAll(PDO::FETCH_ASSOC);
+        $sql = "INSERT INTO {$table} ($fields) VALUES ($values)";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($data);
+    }
 
-        foreach ($caixa as $c) {
+    private static function updateRemote(PDO $db, $table, $id, $data)
+    {
+        $set = [];
 
-            $stmt = $server->prepare("
-                INSERT INTO abertura_caixa
-                (id, usuario_id, status, aberto_em, fechado_em)
-                VALUES (?, ?, ?, ?, ?)
-            ");
-
-            $stmt->execute([
-                $c['id'],
-                $c['usuario_id'],
-                $c['status'],
-                $c['aberto_em'],
-                $c['fechado_em']
-            ]);
-
-            $local->prepare("UPDATE abertura_caixa SET sync = 1 WHERE id = ?")
-                  ->execute([$c['id']]);
+        foreach ($data as $key => $val) {
+            $set[] = "{$key} = :{$key}";
         }
 
-        return count($caixa);
+        $sql = "UPDATE {$table} SET " . implode(',', $set) . " WHERE id = :id";
+
+        $data['id'] = $id;
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($data);
+    }
+
+    private static function deleteRemote(PDO $db, $table, $id)
+    {
+        $stmt = $db->prepare("DELETE FROM {$table} WHERE id = ?");
+        $stmt->execute([$id]);
     }
 }
