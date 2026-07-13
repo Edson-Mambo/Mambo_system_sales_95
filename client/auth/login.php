@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } else {
 
+        // API do servidor
         $apiUrl = "http://localhost/Mambo_system_sales_95/server/api/login.php";
 
         $data = json_encode([
@@ -38,57 +39,103 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         curl_close($ch);
 
+
         if ($response === false) {
 
-            $erro = "Erro de ligação: " . $curlError;
+            $erro = "Erro de ligação ao servidor: " . $curlError;
 
         } else {
 
             $res = json_decode($response, true);
 
+
             if (!is_array($res)) {
 
                 $erro = "Resposta inválida do servidor";
 
-           } elseif (($res['status'] ?? '') === 'success') {
 
-    session_regenerate_id(true);
+            } elseif (($res['status'] ?? '') === 'success') {
 
-    $_SESSION['usuario_id'] = $res['usuario']['id'];
-    $_SESSION['nome'] = $res['usuario']['nome'];
-    $_SESSION['nivel'] = strtolower(trim($res['usuario']['nivel']));
-    $_SESSION['caixa_id'] = 1;
 
-    $nivel = $_SESSION['nivel'];
+                session_regenerate_id(true);
 
-    switch ($nivel) {
 
-        case 'admin':
-        case 'administrador':
-            header("Location: /Mambo_system_sales_95/public/index_admin.php");
-            exit;
+                // Dados do usuário
+                $_SESSION['usuario_id'] = $res['usuario']['id'];
+                $_SESSION['nome']       = $res['usuario']['nome'];
 
-        case 'gerente':
-            header("Location: /Mambo_system_sales_95/public/index_gerente.php");
-            exit;
+                $nivel = strtolower(trim($res['usuario']['nivel']));
 
-        case 'supervisor':
-            header("Location: /Mambo_system_sales_95/public/index_supervisor.php");
-            exit;
 
-        case 'caixa':
-            header("Location: /Mambo_system_sales_95/client/pos/index.php");
-            exit;
+                // Guardar os dois formatos para compatibilidade
+                $_SESSION['nivel'] = $nivel;
+                $_SESSION['nivel_acesso'] = $nivel;
 
-        default:
-            $erro = "Perfil de usuário sem permissão.";
-            break;
-    }
 
-}
+                // Caixa
+                $_SESSION['caixa_id'] = 1;
+
+
+
+                switch ($nivel) {
+
+
+                    case 'admin':
+                    case 'administrador':
+
+                        header(
+                            "Location: /Mambo_system_sales_95/public/index_admin.php"
+                        );
+                        exit;
+
+
+
+                    case 'gerente':
+
+                        header(
+                            "Location: /Mambo_system_sales_95/public/index_gerente.php"
+                        );
+                        exit;
+
+
+
+                    case 'supervisor':
+
+                        header(
+                            "Location: /Mambo_system_sales_95/public/index_supervisor.php"
+                        );
+                        exit;
+
+
+
+                    case 'caixa':
+
+                        header(
+                            "Location: /Mambo_system_sales_95/client/pos/index.php"
+                        );
+                        exit;
+
+
+
+                    default:
+
+                        $erro = "Perfil sem permissão de acesso.";
+
+                        break;
+                }
+
+
+            } else {
+
+                $erro = $res['mensagem'] ?? "Login inválido";
+
+            }
+
         }
+
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">

@@ -11,8 +11,9 @@ if (!isset($_SESSION['usuario_id'])) {
     exit;
 }
 
-if (($_SESSION['nivel_acesso'] ?? '') !== 'caixa') {
-    die("Acesso negado");
+if (!podeAcessarCaixa()) {
+    header("Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso");
+    exit;
 }
 
 $abertura_id = $_SESSION['abertura_id'] ?? null;
@@ -168,7 +169,8 @@ foreach ($carrinho as $item) {
   📲 Enviar Recibo via WhatsApp
 </button> -->
 
-  <a href="logout.php" class="btn btn-sm btn-outline-danger">
+  <a href="/Mambo_system_sales_95/client/auth/logout.php" class="btn btn-sm btn-outline-danger">
+    
     🔒 Terminar Sessão
   </a>
 </div>

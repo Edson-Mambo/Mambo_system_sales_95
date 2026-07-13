@@ -1,25 +1,36 @@
-
 <?php
 /* =========================
    BOOTSTRAP DO SISTEMA
 ========================= */
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 require_once __DIR__ . '/../../config/database.php';
 
+
 /* =========================
    AUTENTICAÇÃO
 ========================= */
+
 if (empty($_SESSION['usuario_id'])) {
+
     header("Location: /Mambo_system_sales_95/client/auth/login.php");
     exit;
+
 }
 
-$nivel = strtolower(trim($_SESSION['nivel'] ?? ''));
 
-// Todos os usuários autenticados podem acessar o POS
+$nivel = strtolower(trim(
+    $_SESSION['nivel']
+    ?? $_SESSION['nivel_acesso']
+    ?? ''
+));
+
+
+// Todos os perfis podem utilizar o POS
+
 $permissoes = [
     'administrador',
     'admin',
@@ -28,132 +39,303 @@ $permissoes = [
     'caixa'
 ];
 
-if (!in_array($nivel, $permissoes)) {
-    header("Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso");
+
+if (!in_array($nivel, $permissoes, true)) {
+
+    header(
+        "Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso"
+    );
+
     exit;
+
 }
+
 
 /* =========================
    CAIXA ABERTA
 ========================= */
+
 $abertura_id = $_SESSION['abertura_id'] ?? null;
 
+
 if (empty($abertura_id)) {
-    header("Location: /Mambo_system_sales_95/client/pos/abrir_caixa.php");
+
+    header(
+        "Location: /Mambo_system_sales_95/client/pos/abrir_caixa.php"
+    );
+
     exit;
+
 }
+
 
 $pdo = Database::conectar();
 
-$stmt = $pdo->prepare("SELECT id FROM abertura_caixa WHERE id = ? AND status = 'aberto'");
-$stmt->execute([(int)$abertura_id]);
+
+$stmt = $pdo->prepare("
+    SELECT id 
+    FROM abertura_caixa 
+    WHERE id = ?
+    AND status = 'aberto'
+");
+
+
+$stmt->execute([
+    (int)$abertura_id
+]);
+
 
 if (!$stmt->fetch()) {
+
+
     unset($_SESSION['abertura_id']);
-    header("Location: /Mambo_system_sales_95/client/pos/abrir_caixa.php?erro=caixa_fechado");
+
+
+    header(
+        "Location: /Mambo_system_sales_95/client/pos/abrir_caixa.php?erro=caixa_fechado"
+    );
+
     exit;
+
 }
+
 
 /* =========================
    USUÁRIO
 ========================= */
-$usuario_nome = $_SESSION['nome'] ?? 'Caixa';
+
+$usuario_nome = 
+    $_SESSION['usuario_nome']
+    ?? $_SESSION['nome']
+    ?? 'Caixa';
+
+
 
 /* =========================
    CLIENTE SELECIONADO
 ========================= */
+
 $clienteSelecionado = [
+
     'id'       => null,
     'nome'     => 'Cliente Geral',
     'telefone' => '',
     'email'    => '',
     'morada'   => '',
     'nuit'     => ''
+
 ];
 
+
 if (!empty($_SESSION['cliente_id'])) {
+
+
     $stmtCliente = $pdo->prepare("
-        SELECT id, nome, apelido, telefone, email, morada, nuit
+        SELECT 
+            id,
+            nome,
+            apelido,
+            telefone,
+            email,
+            morada,
+            nuit
         FROM clientes
         WHERE id = ?
         LIMIT 1
     ");
-    $stmtCliente->execute([$_SESSION['cliente_id']]);
+
+
+    $stmtCliente->execute([
+        $_SESSION['cliente_id']
+    ]);
+
+
     $cliente = $stmtCliente->fetch(PDO::FETCH_ASSOC);
 
+
+
     if ($cliente) {
+
+
         $clienteSelecionado = [
+
             'id'       => $cliente['id'],
-            'nome'     => trim($cliente['nome'] . ' ' . ($cliente['apelido'] ?? '')),
+
+            'nome'     => trim(
+                $cliente['nome']
+                . ' '
+                . ($cliente['apelido'] ?? '')
+            ),
+
             'telefone' => $cliente['telefone'] ?? '',
+
             'email'    => $cliente['email'] ?? '',
+
             'morada'   => $cliente['morada'] ?? '',
+
             'nuit'     => $cliente['nuit'] ?? ''
+
         ];
+
     }
+
 }
+
+
 
 /* =========================
    CARRINHO
 ========================= */
+
 $carrinho = $_SESSION['carrinho'] ?? [];
 
-$total = array_reduce($carrinho, function ($carry, $item) {
-    return $carry + (($item['preco'] ?? 0) * ($item['quantidade'] ?? 0));
-}, 0.0);
+
+$total = array_reduce(
+    $carrinho,
+    function ($carry, $item) {
+
+        return $carry +
+        (
+            ($item['preco'] ?? 0)
+            *
+            ($item['quantidade'] ?? 0)
+        );
+
+    },
+    0
+);
+
+
 
 /* =========================
    ADICIONAR PRODUTO
 ========================= */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adicionar'])) {
 
-    $produto_busca = trim($_POST['busca_produto'] ?? '');
-    $quantidade    = max(1, (int)($_POST['quantidade'] ?? 1));
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    &&
+    isset($_POST['adicionar'])
+) {
+
+
+    $produto_busca = trim(
+        $_POST['busca_produto'] ?? ''
+    );
+
+
+    $quantidade = max(
+        1,
+        (int)($_POST['quantidade'] ?? 1)
+    );
+
+
 
     if ($produto_busca !== '') {
+
+
         $stmt = $pdo->prepare("
             SELECT *
             FROM produtos
             WHERE codigo_barra = ?
-               OR nome LIKE ?
+            OR nome LIKE ?
             LIMIT 1
         ");
-        $stmt->execute([$produto_busca, "%{$produto_busca}%"]);
+
+
+
+        $stmt->execute([
+
+            $produto_busca,
+
+            "%{$produto_busca}%"
+
+        ]);
+
+
+
         $produto = $stmt->fetch(PDO::FETCH_ASSOC);
 
+
+
         if ($produto) {
+
+
             $id = $produto['id'];
+
+
+
             if (isset($_SESSION['carrinho'][$id])) {
-                $_SESSION['carrinho'][$id]['quantidade'] += $quantidade;
+
+
+                $_SESSION['carrinho'][$id]['quantidade']
+                    += $quantidade;
+
+
             } else {
+
+
                 $_SESSION['carrinho'][$id] = [
-                    'id'           => $produto['id'],
-                    'nome'         => $produto['nome'],
-                    'codigo_barra' => $produto['codigo_barra'],
-                    'preco'        => (float)$produto['preco'],
-                    'quantidade'   => $quantidade
+
+                    'id' =>
+                        $produto['id'],
+
+                    'nome' =>
+                        $produto['nome'],
+
+                    'codigo_barra' =>
+                        $produto['codigo_barra'],
+
+                    'preco' =>
+                        (float)$produto['preco'],
+
+                    'quantidade' =>
+                        $quantidade
+
                 ];
+
             }
+
+
         } else {
-            $_SESSION['erro'] = "Produto não encontrado.";
+
+
+            $_SESSION['erro'] =
+                "Produto não encontrado.";
+
         }
+
     }
 
-    header("Location: index.php");
+
+    header(
+        "Location: index.php"
+    );
+
     exit;
+
 }
+
+
 
 /* =========================
    RECIBO
 ========================= */
+
 $numero_recibo = 'REC-' . time();
 
+
+
 /* =========================
-   MENSAGEM DE ERRO (flash)
+   MENSAGEM FLASH
 ========================= */
+
 $erro_flash = $_SESSION['erro'] ?? null;
+
 unset($_SESSION['erro']);
+
 ?>
+
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>

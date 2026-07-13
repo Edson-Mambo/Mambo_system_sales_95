@@ -1,60 +1,83 @@
 <?php
+
 session_start();
 
-require_once __DIR__ . '/../config/database.php';
-require_once "../middleware/auth.php";
-
-requireRole(['admin']);
-
-$pdo = Database::conectar();
-
 /* =========================
-   SEGURANÇA ERP
+   SEGURANÇA CLIENTE
 ========================= */
-if (!isset($_SESSION['usuario_id'])) {
-    header("Location: ../login.php");
+
+if (empty($_SESSION['usuario_id'])) {
+
+    header("Location: /Mambo_system_sales_95/client/auth/login.php");
     exit;
+
 }
 
+
 /* =========================
-   TIMEOUT ERP
+   VALIDAR PERFIL
 ========================= */
+
+$nivel = strtolower(trim($_SESSION['nivel'] ?? ''));
+
+
+if (!in_array($nivel, ['admin', 'administrador'])) {
+
+    header("Location: /Mambo_system_sales_95/client/auth/login.php?erro=acesso");
+    exit;
+
+}
+
+
+/* =========================
+   TIMEOUT SESSÃO
+========================= */
+
 $timeout = 1800;
 
-if (isset($_SESSION['ultimo_acesso']) && (time() - $_SESSION['ultimo_acesso'] > $timeout)) {
+
+if (
+    isset($_SESSION['ultimo_acesso']) &&
+    (time() - $_SESSION['ultimo_acesso']) > $timeout
+) {
+
     session_destroy();
-    header("Location: ../login.php?expirado=1");
+
+    header(
+        "Location: /Mambo_system_sales_95/client/auth/login.php?expirado=1"
+    );
+
     exit;
+
 }
+
 
 $_SESSION['ultimo_acesso'] = time();
 
+
+
 /* =========================
-   KPIs (BACKEND + FALLBACK)
+   UTILIZADOR LOGADO
 ========================= */
-try {
 
-    $stmt = $pdo->query("
-        SELECT
-            (SELECT IFNULL(SUM(total),0) FROM vendas WHERE DATE(data_venda)=CURDATE()) AS vendasHoje,
-            (SELECT IFNULL(SUM(total),0) FROM vendas) AS faturacaoTotal,
-            (SELECT COUNT(*) FROM produtos) AS totalProdutos,
-            (SELECT COUNT(*) FROM produtos WHERE stock <= 5) AS stockBaixo,
-            (SELECT COUNT(*) FROM usuarios) AS totalUsuarios
-    ");
+$usuario = $_SESSION['nome'] ?? 'Administrador';
 
-    $kpi = $stmt->fetch(PDO::FETCH_ASSOC);
 
-} catch (Exception $e) {
+/* =========================
+   KPI INICIAL
+   (VEM DA API)
+========================= */
 
-    $kpi = [
-        'vendasHoje'=>0,
-        'faturacaoTotal'=>0,
-        'totalProdutos'=>0,
-        'stockBaixo'=>0,
-        'totalUsuarios'=>0
-    ];
-}
+$kpi = [
+
+    'vendasHoje'     => 0,
+    'faturacaoTotal' => 0,
+    'totalProdutos'  => 0,
+    'stockBaixo'     => 0,
+    'totalUsuarios'  => 0
+
+];
+
 ?>
 
 <!DOCTYPE html>
@@ -310,7 +333,7 @@ body{
 
     <div class="right-menu">
         <span class="badge">ADMIN</span>
-        <a class="logout" href="logout.php">Sair</a>
+        <a class="logout"  href="/Mambo_system_sales_95/client/auth/logout.php" class="btn btn-sm btn-outline-danger">Sair</a>
     </div>
 
 </div>

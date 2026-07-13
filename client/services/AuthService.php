@@ -74,18 +74,31 @@ class AuthService
                 ")->execute([password_hash($senha, PASSWORD_BCRYPT), $user['id']]);
             }
 
-            /* =========================
-               SESSÃO
-            ========================= */
-            session_regenerate_id(true); // previne session fixation
+           /* =========================
+                SESSÃO DO UTILIZADOR
+                ========================= */
 
-            $_SESSION['usuario_id']    = $user['id'];
-            $_SESSION['usuario_uuid']  = $user['uuid'];
-            $_SESSION['usuario_nome']  = $user['nome'];
-            $_SESSION['usuario_login'] = $user['username'];
-            $_SESSION['nivel_acesso']  = $user['nivel'] ?? 'caixa';
-            $_SESSION['logado']        = true;
-            $_SESSION['csrf_token']    = bin2hex(random_bytes(32));
+                session_regenerate_id(true);
+
+                $nivel = strtolower(trim($user['nivel'] ?? 'caixa'));
+
+                $_SESSION['usuario_id']    = $user['id'];
+                $_SESSION['usuario_uuid']  = $user['uuid'];
+                $_SESSION['usuario_nome']  = $user['nome'];
+                $_SESSION['usuario_login'] = $user['username'];
+
+                /*
+                Compatibilidade cliente-servidor
+                mantém os dois nomes
+                */
+                $_SESSION['nivel_acesso'] = $nivel;
+                $_SESSION['nivel']        = $nivel;
+
+                $_SESSION['logado'] = true;
+
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+                $_SESSION['ultimo_acesso'] = time();
 
             /* =========================
                ÚLTIMO ACESSO
@@ -144,15 +157,27 @@ class AuthService
                 return ['success' => false, 'message' => 'PIN incorreto'];
             }
 
-            session_regenerate_id(true);
+            /* =========================
+                SESSÃO LOGIN PIN
+                ========================= */
 
-            $_SESSION['usuario_id']    = $user['id'];
-            $_SESSION['usuario_uuid']  = $user['uuid'];
-            $_SESSION['usuario_nome']  = $user['nome'];
-            $_SESSION['usuario_login'] = $user['username'];
-            $_SESSION['nivel_acesso']  = $user['nivel'] ?? 'caixa';
-            $_SESSION['logado']        = true;
-            $_SESSION['csrf_token']    = bin2hex(random_bytes(32));
+                session_regenerate_id(true);
+
+                $nivel = strtolower(trim($user['nivel'] ?? 'caixa'));
+
+                $_SESSION['usuario_id']    = $user['id'];
+                $_SESSION['usuario_uuid']  = $user['uuid'];
+                $_SESSION['usuario_nome']  = $user['nome'];
+                $_SESSION['usuario_login'] = $user['username'];
+
+                $_SESSION['nivel_acesso'] = $nivel;
+                $_SESSION['nivel']        = $nivel;
+
+                $_SESSION['logado'] = true;
+
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+                $_SESSION['ultimo_acesso'] = time();
 
             $this->pdo->prepare("
                 UPDATE usuarios

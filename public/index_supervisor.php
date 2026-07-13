@@ -1,22 +1,87 @@
 <?php
+
 session_start();
 
 
+/* =========================
+   CONTROLO DE SESSÃO
+========================= */
 
-// CONTROLO DE SESSÃO
-if (isset($_SESSION['usuario_id']) && in_array($_SESSION['nivel_acesso'], ['admin', 'gerente', 'supervisor'])) {
-    if (isset($_SESSION['ultimo_acesso'])) {
-        $tempo_inativo = time() - $_SESSION['ultimo_acesso'];
+$timeout = 1800; // 30 minutos
 
-        if ($tempo_inativo > $timeout) {
-            session_unset();
-            session_destroy();
-            header("Location: ../login.php?mensagem=Sessão expirada por inatividade.");
-            exit();
+
+if (!empty($_SESSION['usuario_id'])) {
+
+
+    $nivel = strtolower(trim($_SESSION['nivel'] ?? ''));
+
+
+    // Perfis autorizados
+    $perfis = [
+        'admin',
+        'administrador',
+        'gerente',
+        'supervisor',
+        'caixa'
+    ];
+
+
+    if (in_array($nivel, $perfis)) {
+
+
+        if (isset($_SESSION['ultimo_acesso'])) {
+
+
+            $tempo_inativo = time() - $_SESSION['ultimo_acesso'];
+
+
+            if ($tempo_inativo > $timeout) {
+
+
+                session_unset();
+                session_destroy();
+
+
+                header(
+                    "Location: /Mambo_system_sales_95/client/auth/login.php?mensagem=Sessão expirada por inatividade."
+                );
+
+                exit();
+
+            }
+
         }
+
+
+        $_SESSION['ultimo_acesso'] = time();
+
+
+    } else {
+
+
+        session_destroy();
+
+
+        header(
+            "Location: /Mambo_system_sales_95/client/auth/login.php?erro=perfil"
+        );
+
+        exit();
+
     }
-    $_SESSION['ultimo_acesso'] = time();
+
+
+} else {
+
+
+    header(
+        "Location: /Mambo_system_sales_95/client/auth/login.php"
+    );
+
+    exit();
+
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -276,7 +341,7 @@ body {
 
     <div class="right-menu">
         <span class="badge">Supervisor</span>
-        <a class="logout" href="logout.php">⛔ Sair</a>
+        <a class="logout"  href="/Mambo_system_sales_95/client/auth/logout.php" class="btn btn-sm btn-outline-danger">⛔ Sair</a>
     </div>
 
 </div>
