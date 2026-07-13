@@ -32,7 +32,7 @@ public static function conectarRemoto(): PDO
     $host = "localhost";
 
     // ALTERAR PARA O NOME REAL DA SUA BASE
-    $dbname = "mambo_system_sales_95";
+    $dbname = "mambo_system_95";
 
     $user = "root";
     $pass = "";

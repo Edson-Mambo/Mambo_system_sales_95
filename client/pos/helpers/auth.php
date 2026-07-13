@@ -4,58 +4,61 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../../config/database.php';
-
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 function response($success, $message)
 {
     echo json_encode([
         'success' => $success,
         'message' => $message
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
+
 /* =========================
-   LOGIN
+   VERIFICAR LOGIN
 ========================= */
-if (empty($_SESSION['usuario_id'])) {
-    response(false, 'Não autenticado');
+function verificarLogin()
+{
+    if (empty($_SESSION['usuario_id'])) {
+        response(false, 'Não autenticado');
+    }
+
+    return true;
 }
 
+
 /* =========================
-   DADOS
+   VERIFICAR CAIXA
 ========================= */
-$data = json_decode(file_get_contents("php://input"), true);
+function verificarCaixa()
+{
+    if (empty($_SESSION['usuario_id'])) {
+        response(false, 'Sessão expirada');
+    }
 
-$senha = trim($data['senha'] ?? '');
-
-if ($senha === '') {
-    response(false, 'Senha obrigatória');
+    return true;
 }
 
+
 /* =========================
-   PERMISSÃO
+   VERIFICAR ADMIN/SUPERVISOR
+   usar somente quando precisar senha
 ========================= */
-$nivel = strtolower(trim((string)($_SESSION['nivel'] ?? '')));
+function verificarAutorizacaoSenha($senha)
+{
+    $senha = trim($senha);
 
-$permitidos = ['admin', 'gerente', 'supervisor'];
+    if ($senha === '') {
+        response(false, 'Senha obrigatória');
+    }
 
-if (!in_array($nivel, $permitidos, true)) {
-    response(false, 'Sem permissão');
+    $senha_correta = '1234';
+
+    if (!hash_equals($senha_correta, $senha)) {
+        response(false, 'Senha incorreta');
+    }
+
+    return true;
 }
-
-/* =========================
-   SENHA (TESTE)
-========================= */
-$senha_correta = '1234';
-
-if (!hash_equals($senha_correta, $senha)) {
-    response(false, 'Senha incorreta');
-}
-
-/* =========================
-   OK
-========================= */
-response(true, 'Autorizado');

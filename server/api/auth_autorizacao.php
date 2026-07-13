@@ -1,58 +1,102 @@
 <?php
-header('Content-Type: application/json');
+
+header('Content-Type: application/json; charset=utf-8');
+
 require_once '../../config/database.php';
 
-// evita qualquer output que quebre JSON
 error_reporting(0);
-ini_set('display_errors', 0);
+ini_set('display_errors', 0');
+
+/* =========================
+   RESPOSTA
+========================= */
+function response(bool $success, string $message): void
+{
+    echo json_encode([
+        'success' => $success,
+        'message' => $message
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 try {
-    $pdo = Database::conectar();
 
+    /* =========================
+       RECEBER JSON
+    ========================= */
     $input = json_decode(file_get_contents("php://input"), true);
 
-    if (!$input) {
-        echo json_encode([
-            "status" => "error",
-            "mensagem" => "JSON inválido"
-        ]);
-        exit;
+    if (!is_array($input)) {
+        response(false, 'JSON inválido');
     }
 
     $senha = trim($input['senha'] ?? '');
 
-    if (!$senha) {
-        echo json_encode([
-            "status" => "error",
-            "mensagem" => "Senha obrigatória"
-        ]);
-        exit;
+    if ($senha === '') {
+        response(false, 'Senha obrigatória');
     }
 
-    $stmt = $pdo->prepare("
-        SELECT senha 
-        FROM usuarios 
-        WHERE nivel IN ('admin','gerente')
-    ");
-    $stmt->execute();
+    $usuarios = [];
 
-    $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    /* =========================
+       BANCO LOCAL
+    ========================= */
+    try {
 
-    foreach ($usuarios as $u) {
-        if (password_verify($senha, $u['senha'])) {
-            echo json_encode(["status" => "success"]);
-            exit;
+        $pdo = Database::conectarLocal();
+
+        $stmt = $pdo->prepare("
+            SELECT id, senha, nivel
+            FROM usuarios
+            WHERE nivel IN ('admin','gerente','supervisor')
+        ");
+
+        $stmt->execute();
+
+        $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    } catch (Throwable $e) {
+        // ignora e tenta remoto
+    }
+
+    /* =========================
+       BANCO REMOTO
+    ========================= */
+    if (empty($usuarios)) {
+
+        try {
+
+            $pdo = Database::conectarRemoto();
+
+            $stmt = $pdo->prepare("
+                SELECT id, senha, nivel
+                FROM usuarios
+                WHERE nivel IN ('admin','gerente','supervisor')
+            ");
+
+            $stmt->execute();
+
+            $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        } catch (Throwable $e) {
+            response(false, 'Não foi possível conectar ao banco de dados');
         }
     }
 
-    echo json_encode([
-        "status" => "error",
-        "mensagem" => "Senha inválida"
-    ]);
+    /* =========================
+       VALIDAR SENHA
+    ========================= */
+    foreach ($usuarios as $usuario) {
 
-} catch (Exception $e) {
-    echo json_encode([
-        "status" => "error",
-        "mensagem" => "Erro interno"
-    ]);
+        if (password_verify($senha, $usuario['senha'])) {
+
+            response(true, 'Autorizado');
+        }
+    }
+
+    response(false, 'Senha incorreta');
+
+} catch (Throwable $e) {
+
+    response(false, 'Erro interno: ' . $e->getMessage());
 }
